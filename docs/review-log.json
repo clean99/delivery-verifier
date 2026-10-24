@@ -1,0 +1,191 @@
+{
+  "schema_version": 1,
+  "stage": 5,
+  "scope": "Confirmed pre-release review findings",
+  "evidence_grade": "A: local regression tests and implementation inspection",
+  "regression_file": "tests/test_review_fixes.py",
+  "verification": {
+    "baseline": "Before the fixes, the initial 21 regression methods reported 24 assertion failures and one configuration error; every finding had a failing case. The configuration error was the new exact-code exemption, whose underlying false positive also had a separate assertion failure.",
+    "focused": "22 regression methods passed after fixes, including an additional custom-assertion waiver check.",
+    "full_suite": "Final full suite: 152 tests passed in 384.629 seconds (exit 0).",
+    "lint": "Ruff 0.17.1 from an existing offline cache: all checks passed.",
+    "syntax": "compileall passed for src, tests, and examples.",
+    "demo": "The real CLI demo passed: hollow proof rejected, valid proof red=1/green=0, readiness passed, delivery remained blocked without human approval.",
+    "commands": [
+      "PYTHONPATH=src python3 -m unittest discover -s tests -v",
+      "ruff check .",
+      "python3 -m compileall -q src tests examples",
+      "python3 examples/demo/run.py",
+      "git diff --check"
+    ],
+    "local_logs": [
+      ".dv/review-before.log",
+      ".dv/review-after.log",
+      ".dv/test-suite-stage5.log",
+      ".dv/lint-stage5.log",
+      ".dv/demo-stage5.log"
+    ],
+    "network": "No network services used. The partial-clone regression uses a local file upstream and a sentinel transport that cannot contact a remote. No push or publishing commands were executed."
+  },
+  "findings": [
+    {
+      "id": "C1",
+      "status": "fixed",
+      "change": "Preflight rejects every restored path absent from HEAD but already present locally, including ignored files, dangling symlinks, and directories, before any source restoration.",
+      "files": ["src/dv/redgreen.py"],
+      "test": "test_C1_ignored_deleted_path_is_never_overwritten",
+      "evidence": "All three path kinds retain their original local contents or link target; the source fix stays intact."
+    },
+    {
+      "id": "C2",
+      "status": "fixed",
+      "change": "PreToolUse installs onFailure=block and an explicit timeout covering all configured checks plus a margin. A shorter POSIX adapter deadline permits cleanup and deny JSON. Catchable interrupts and SystemExit are denied. Supported minimum Claude Code version is 2.1.310.",
+      "files": ["src/dv/hooks.py", "src/dv/cli.py", "README.md", "README.zh-CN.md"],
+      "tests": ["test_C2_hook_install_is_fail_closed_and_has_outer_timeout", "test_C2_hook_interrupt_and_abnormal_exit_emit_deny"],
+      "evidence": "Installed policy and timeout are asserted; a real check sends SIGTERM to the adapter, which emits parseable deny JSON and exits zero. Installed Claude Code 2.1.310 command-hook schema and failure-handling code were inspected locally for onFailure support; no model session or push was invoked."
+    },
+    {
+      "id": "C3",
+      "status": "fixed",
+      "change": "Attempt start atomically invalidates old proof with state=running and ok=false. Only a completed attempt publishes state=complete. Gate rejects incomplete attempts and residual restoration plans, including with a waiver.",
+      "files": ["src/dv/redgreen.py", "src/dv/evidence.py"],
+      "tests": ["test_C3_actual_green_interrupt_invalidates_old_success", "test_C3_recovery_plan_blocks_even_complete_or_waived_proof"],
+      "evidence": "After a valid empty-output proof, a second green phase sends a real SIGINT. CLI exits 130; old success cannot be reused and the next gate fails."
+    },
+    {
+      "id": "C4",
+      "status": "fixed",
+      "change": "Red and green use distinct fresh Python bytecode-cache prefixes and disable cache writes; existing user caches are untouched.",
+      "files": ["src/dv/redgreen.py", "src/dv/process.py"],
+      "test": "test_C4_INSTALL_DOC_1_equal_length_import_uses_fresh_phase_caches",
+      "evidence": "A real imported function changes from 21 to 42 with equal source length and a forced identical timestamp. An existing stale pyc remains byte-for-byte unchanged; red exits 1 and green exits 0."
+    },
+    {
+      "id": "C5",
+      "status": "fixed",
+      "change": "Snapshot all reverted paths by contents, type, and full mode. Save differences in redgreen-mutations.json, alongside the Git patch, before restoration; reserve that sidecar against attachment overlap.",
+      "files": ["src/dv/redgreen.py", "src/dv/item.py"],
+      "test": "test_C5_deleted_baseline_path_mutations_are_saved",
+      "evidence": "Writes, chmod, and replacement with a symlink on a baseline-only deleted file each fail the proof, skip green, and retain before/after evidence. Content bytes are recoverable from the saved JSON."
+    },
+    {
+      "id": "HYG-001",
+      "status": "fixed",
+      "change": "Find JavaScript callback bodies after argument objects or destructured parameters rather than balancing the first brace in the call.",
+      "files": ["src/dv/hygiene.py", "src/dv/lexical.py"],
+      "test": "test_HYG_001_callback_body_follows_options_and_destructuring",
+      "evidence": "Options objects, destructured arrow callbacks, and function callbacks retain assertions; an assertion-free destructured callback still fails."
+    },
+    {
+      "id": "HYG-002",
+      "status": "fixed",
+      "change": "Separate code and comment views. Debug checks ignore strings/comments; unfinished markers apply only to comments. Add visible exact-line allowed_code_lines exemptions for those checks.",
+      "files": ["src/dv/hygiene.py", "src/dv/lexical.py", "src/dv/config.py"],
+      "tests": ["test_HYG_002_only_code_debug_and_comment_todos_fail", "test_HYG_002_exact_code_exemption_is_visible"],
+      "evidence": "Business strings and regexes containing debugger, TODO, or console.log pass. A multiline TODO comment fails. Exact exemptions are warned visibly and whitespace changes stop matching."
+    },
+    {
+      "id": "HYG-003",
+      "status": "fixed",
+      "change": "Focused-test scanning recognizes only followed by a call chain, including parameterized each and tagged tables.",
+      "files": ["src/dv/hygiene.py"],
+      "test": "test_HYG_003_focused_parameterized_and_tagged_tests_fail",
+      "evidence": "Both test.only.each and describe.only.each fail in call and template-table forms."
+    },
+    {
+      "id": "HYG-004",
+      "status": "fixed",
+      "change": "Inspect Python assertion argument ASTs: comparisons and behavior calls count as behavioral, while simple truthiness and existence checks remain weak.",
+      "files": ["src/dv/hygiene.py"],
+      "test": "test_HYG_004_python_behavior_boolean_assertions",
+      "evidence": "assertTrue/assertFalse comparisons and predicates pass; bare values, exists(), and constant true remain flagged."
+    },
+    {
+      "id": "HYG-005",
+      "status": "fixed",
+      "change": "Recognize Go Testify assertions, import aliases, formatted variants, and receivers created with New. Custom assertion frameworks can use a visible weak_test_justification without waiving red/green.",
+      "files": ["src/dv/hygiene.py", "src/dv/item.py"],
+      "tests": ["test_HYG_005_go_testify_aliases_and_receivers", "test_HYG_005_custom_framework_has_a_visible_inspection_waiver"],
+      "evidence": "require.Equal/NoError, aliased imports, and New receivers pass; assertion-free tests fail. A reasoned custom-framework waiver yields a warning and still requires V2."
+    },
+    {
+      "id": "HYG-006",
+      "status": "fixed",
+      "change": "Use language-specific test-entry matchers; Rust test attributes no longer collide with JavaScript test(...) matching.",
+      "files": ["src/dv/hygiene.py"],
+      "test": "test_HYG_006_rust_test_named_test_is_one_block",
+      "evidence": "A Rust function named test with assert_eq! passes as one block; its assertion-free counterpart fails."
+    },
+    {
+      "id": "HYG-007",
+      "status": "fixed",
+      "change": "Recognize should_panic attributes associated with Rust test functions as behavior assertions.",
+      "files": ["src/dv/hygiene.py"],
+      "test": "test_HYG_007_rust_should_panic_is_an_assertion",
+      "evidence": "Both should_panic and should_panic(expected=...) forms pass without a redundant assert macro."
+    },
+    {
+      "id": "HYG-008",
+      "status": "fixed",
+      "change": "Apply junk-path failures only to files still present at HEAD; retain deletion statistics.",
+      "files": ["src/dv/hygiene.py"],
+      "test": "test_HYG_008_deleting_junk_is_allowed_and_counted",
+      "evidence": "Deleting a committed build output and synthetic key file passes hygiene while preserving removed-line and file entries."
+    },
+    {
+      "id": "HYG-009",
+      "status": "fixed",
+      "change": "Recognize JavaScript regex literals and escapes before scanning for comment delimiters.",
+      "files": ["src/dv/hygiene.py", "src/dv/lexical.py"],
+      "test": "test_HYG_009_regex_escaped_slashes_are_not_comments",
+      "evidence": "A URL-scheme regex produces no comment finding; a real trailing comment is still extracted."
+    },
+    {
+      "id": "HYG-010",
+      "status": "fixed",
+      "change": "Pass only extracted comment text to authorship inspection while matching exemptions against the original complete source line.",
+      "files": ["src/dv/hygiene.py"],
+      "test": "test_HYG_010_authorship_scans_comment_not_string",
+      "evidence": "A synthetic authorship string beside a harmless comment passes. The same phrase in an actual comment fails unless its exact source line is exempted."
+    },
+    {
+      "id": "privacy-1",
+      "status": "fixed",
+      "change": "Installer and dry-run JSON contain only owned hook entries, destination path, version requirement, and status; unrelated settings remain only on disk.",
+      "files": ["src/dv/hooks.py", "tests/test_hooks.py"],
+      "test": "test_privacy_1_installer_stdout_never_echoes_existing_settings",
+      "evidence": "A synthetic service token remains in the saved env object and never appears on stdout in preview or actual installation. Existing settings and idempotence remain covered."
+    },
+    {
+      "id": "privacy-2",
+      "status": "fixed",
+      "change": "All internal Git operations force no lazy fetching and disable every transport protocol. Partial clones require Git's no-lazy-fetch capability; absent objects fail with a local preparation instruction.",
+      "files": ["src/dv/git.py", "SECURITY.md"],
+      "test": "test_privacy_2_promisor_objects_remain_local_only",
+      "evidence": "In a real blob:none clone, a missing old blob remains absent after Repo.blob and the hygiene CLI. A sentinel promisor transport is never invoked, despite a permissive local transport setting and a caller-set lazy-fetch restriction."
+    },
+    {
+      "id": "INSTALL-DOC-1",
+      "status": "fixed",
+      "change": "Same root cause and cache-isolation fix as C4; this does more than disabling bytecode writes.",
+      "files": ["src/dv/redgreen.py", "src/dv/process.py"],
+      "test": "test_C4_INSTALL_DOC_1_equal_length_import_uses_fresh_phase_caches",
+      "evidence": "The real unittest import distinguishes the equal-length 21-to-42 fix despite a deliberately stale existing cache and identical source timestamps."
+    },
+    {
+      "id": "INSTALL-DOC-2",
+      "status": "fixed",
+      "change": "Choose the documented limitation rather than adding a Rust rewriter. Error text and both READMEs explicitly say that every changed Rust production file containing inline tests is rejected, even with unchanged inline tests and a separate new regression.",
+      "files": ["src/dv/redgreen.py", "README.md", "README.zh-CN.md", "docs/design.md"],
+      "test": "test_INSTALL_DOC_2_existing_inline_rust_error_explains_limitation",
+      "evidence": "The unchanged-inline-test reproduction returns the precise limitation. Separating only the new test is no longer suggested as sufficient."
+    }
+  ],
+  "limitations": [
+    "No hosted Claude Code model session was started; hook protocol, generated policy, real adapter signals, and installed host implementation were checked locally.",
+    "Python commands overriding the cache environment and non-Python build caches require an appropriate clean-build recipe.",
+    "Lexical hygiene remains heuristic; documented exceptions are visible and do not replace behavioral proof.",
+    "Mixed Rust production/inline-test red-green rewriting remains unsupported and is now documented accurately.",
+    "No human approval, commit, push, or publication was performed."
+  ]
+}

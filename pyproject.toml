@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "delivery-verifier"
+version = "0.1.0.dev0"
+description = "Local verification gates for agent-made code changes"
+readme = "README.md"
+license = {file = "LICENSE"}
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+dv = "dv.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+dv = ["_vendor/NOTICE", "_vendor/tomllib/LICENSE"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+extend-exclude = ["src/dv/_vendor"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]

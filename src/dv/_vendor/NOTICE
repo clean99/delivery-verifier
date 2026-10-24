@@ -1,0 +1,3 @@
+tomllib: copied from CPython 3.14.6 (Lib/tomllib), unchanged.
+Used on Python 3.10; newer interpreters use the standard library.
+Copyright and MIT license: tomllib/LICENSE and source headers.
