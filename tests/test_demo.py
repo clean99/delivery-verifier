@@ -23,3 +23,5 @@ class DemoTests(unittest.TestCase):
         self.assertIn("[FAIL] V5 human approval", result.stdout)
         self.assertIn("SYNTHETIC review fixture", result.stdout)
         self.assertIn("The throwaway repository and its logs have been removed", result.stdout)
+        self.assertNotIn(str(ROOT), result.stdout)
+        self.assertNotIn(sys.executable, result.stdout)

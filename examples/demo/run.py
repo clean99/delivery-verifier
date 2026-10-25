@@ -70,6 +70,9 @@ def run_demo(root: Path) -> None:
         git("add", ".")
         git("commit", "-m", message)
 
+    def shown(detail: str) -> str:
+        return detail.replace(str(root), ".").replace(sys.executable, "python")
+
     def dv(*args: str, expected: int = 0) -> dict:
         print(f"\n$ dv {shlex.join(args)} --json", flush=True)
         result = run(sys.executable, "-m", "dv", *args, "--json", expected=expected)
@@ -80,7 +83,7 @@ def run_demo(root: Path) -> None:
             print(f"  red={output['red']['exit_code']}, green={output['green']['exit_code']}")
         else:
             for check in output.get("checks", []):
-                print(f"  [{check['outcome'].upper()}] {check['check']}: {check['detail']}")
+                print(f"  [{check['outcome'].upper()}] {check['check']}: {shown(check['detail'])}")
         return output
 
     git("init", "--template=", "-b", "main")
