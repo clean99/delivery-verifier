@@ -4,6 +4,7 @@
   "node": {"version": "20.20.2", "command": ["node", "--test", "--test-reporter=tap", "value.test.cjs"]},
   "normalization": "Temporary fixture roots and toolchain paths replaced by placeholders; blank-line trailing spaces removed. Report structure and exception types preserved.",
   "phase_evidence": "Captured pytest logs predate the phase probe and now fail closed. tests/test_runner_phases.py runs the real Python runners with the probe, including body, fixture, lifecycle and cleanup assertions.",
+  "node_nested": "Captured with the Node command above from NESTED in tests/test_node_runner.py; two t.test levels plus a describe suite. Parent tests count toward # fail; suite containers do not.",
   "cases": {
     "assertion": "One test compares 1 with 2 using Python assert or node:assert/strict.equal.",
     "runtime": "One test raises RuntimeError or Error before any assertion.",

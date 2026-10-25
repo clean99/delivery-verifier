@@ -110,18 +110,35 @@ def node_assertions(text: str) -> bool:
     cancelled = re.findall(r"^# cancelled (\d+)$", text, re.M)
     if len(failures) != 1 or cancelled != ["0"] or int(failures[0]) == 0:
         return False
-    blocks = re.findall(r"^([ \t]*)not ok [^\n]+\n\1  ---\n(.*?)^\1  \.\.\.$", text, re.M | re.S)
+    blocks = list(
+        re.finditer(r"^([ \t]*)not ok [^\n]+\n\1  ---\n(.*?)^\1  \.\.\.$", text, re.M | re.S)
+    )
     if len(blocks) != len(re.findall(r"^\s*not ok ", text, re.M)):
         return False
-    assertions = 0
-    for indent, block in blocks:
+    assertions = counted = 0
+    for match in blocks:
+        indent, block = match.groups()
         fields = dict(re.findall(r"^" + indent + r"  (\w+): '([^'\n]+)'$", block, re.M))
+        counted += fields.get("type") != "suite"
         if fields.get("failureType") == "subtestsFailed":
-            continue
-        if fields.get("failureType") != "testCodeFailure" or fields.get("code") != "ERR_ASSERTION":
+            starts = list(re.finditer(r"^" + indent + r"# Subtest: ", text[: match.start()], re.M))
+            if (
+                fields.get("code") != "ERR_TEST_FAILURE"
+                or not starts
+                or not any(
+                    starts[-1].start() < child.start() < match.start()
+                    and len(child[1]) > len(indent)
+                    for child in blocks
+                )
+            ):
+                return False
+        elif (
+            fields.get("failureType") == "testCodeFailure" and fields.get("code") == "ERR_ASSERTION"
+        ):
+            assertions += 1
+        else:
             return False
-        assertions += 1
-    return assertions == int(failures[0])
+    return assertions > 0 and counted == int(failures[0])
 
 
 def red_assertion(phase: dict, content: bytes, runner: str) -> tuple[bool, str]:

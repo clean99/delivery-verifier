@@ -129,7 +129,7 @@ dv init --implementer model-a --base main
 | --- | --- |
 | Python unittest | `FAILED (failures=N)` 中失败数大于零、错误数为零，每份失败堆栈均为 `AssertionError`。探针需确认每项失败发生在测试主体中；setup、teardown、`addCleanup` 和 `addAsyncCleanup` 失败均会被拒绝。 |
 | pytest | 保留默认或完整堆栈（`--tb=long`）及汇总，失败数大于零，每项失败终止于 `AssertionError`，并有测试主体阶段证据。Fixture 初始化、清理及 unittest 生命周期中的失败均会被拒绝，包括 pytest 将其标成 `FAILED` 的情况。short/line/隐藏堆栈格式暂不支持。 |
-| Node.js test runner | 使用 `node --test --test-reporter=tap`，`# fail` 大于零、cancelled 为零，每项失败均报告 `failureType: 'testCodeFailure'` 和 `code: 'ERR_ASSERTION'`。 |
+| Node.js test runner | 使用 `node --test --test-reporter=tap`，`# fail` 大于零、cancelled 为零，根本失败均报告 `failureType: 'testCodeFailure'` 和 `code: 'ERR_ASSERTION'`。`subtestsFailed` 父项需有失败子项；汇总计入父测试，排除 suite 容器。 |
 
 包装命令需显式指定 `test_runner`。Python 包装命令还需接入内置探针：unittest 用 `python -m dv._runner_probe`，pytest 用 `python -m pytest -p dv._runner_probe`，对应解释器中需能导入 `dv`。阶段记录缺失、不完整或有歧义时，回归证明失败。静态检查和完整测试沿用原命令。
 

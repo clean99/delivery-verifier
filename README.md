@@ -127,7 +127,7 @@ dv init --implementer model-a --base main
 | --- | --- |
 | Python unittest | `FAILED (failures=N)` with positive failures, no errors, and `AssertionError` in every failure traceback. The phase probe must establish test-body execution for every failure; setup, teardown, `addCleanup` and `addAsyncCleanup` failures are rejected. |
 | pytest | Default/long traceback report (`--tb=long`), positive failed count, every failure ending in `AssertionError`, and test-body phase evidence. Fixture setup/finalizer failures and unittest lifecycle failures are rejected, even when pytest labels them `FAILED`. Short/line/hidden traceback modes are unsupported. |
-| Node.js test runner | `node --test --test-reporter=tap`: positive `# fail`, zero cancelled tests, each failed test reporting `failureType: 'testCodeFailure'` and `code: 'ERR_ASSERTION'`. |
+| Node.js test runner | `node --test --test-reporter=tap`: positive `# fail`, zero cancelled tests, each underlying failure reporting `failureType: 'testCodeFailure'` and `code: 'ERR_ASSERTION'`. Propagated `subtestsFailed` parents require failed children; parent tests count toward `# fail`, while suite containers do not. |
 
 Wrapper commands must declare `test_runner`. Python wrappers also need to run the bundled probe (`python -m dv._runner_probe` for unittest, `python -m pytest -p dv._runner_probe` for pytest), with `dv` importable in that interpreter. A declared runner alone supplies no phase evidence. Missing, incomplete or ambiguous phase records fail closed. Static and full-suite commands are not instrumented.
 

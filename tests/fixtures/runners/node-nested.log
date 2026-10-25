@@ -1,0 +1,99 @@
+TAP version 13
+# Subtest: parent
+    # Subtest: child
+        # Subtest: grandchild
+        not ok 1 - grandchild
+          ---
+          duration_ms: 0.855709
+          location: '<fixture>/value.test.cjs:5:17'
+          failureType: 'testCodeFailure'
+          error: |-
+            Expected values to be strictly equal:
+
+            1 !== 2
+
+          code: 'ERR_ASSERTION'
+          name: 'AssertionError'
+          expected: 2
+          actual: 1
+          operator: 'strictEqual'
+          stack: |-
+            TestContext.<anonymous> (<fixture>/value.test.cjs:5:49)
+            Test.runInAsyncScope (node:async_hooks:206:9)
+            Test.run (node:internal/test_runner/test:796:25)
+            Test.start (node:internal/test_runner/test:702:17)
+            TestContext.test (node:internal/test_runner/test:292:20)
+            TestContext.<anonymous> (<fixture>/value.test.cjs:5:17)
+            Test.runInAsyncScope (node:async_hooks:206:9)
+            Test.run (node:internal/test_runner/test:796:25)
+            Test.start (node:internal/test_runner/test:702:17)
+            TestContext.test (node:internal/test_runner/test:292:20)
+          ...
+        1..1
+    not ok 1 - child
+      ---
+      duration_ms: 1.049083
+      location: '<fixture>/value.test.cjs:4:13'
+      failureType: 'subtestsFailed'
+      error: '1 subtest failed'
+      code: 'ERR_TEST_FAILURE'
+      stack: |-
+        async TestContext.<anonymous> (<fixture>/value.test.cjs:4:5)
+      ...
+    1..1
+not ok 1 - parent
+  ---
+  duration_ms: 1.401958
+  location: '<fixture>/value.test.cjs:3:1'
+  failureType: 'subtestsFailed'
+  error: '1 subtest failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: suite
+    # Subtest: child
+    not ok 1 - child
+      ---
+      duration_ms: 0.110708
+      location: '<fixture>/value.test.cjs:9:5'
+      failureType: 'testCodeFailure'
+      error: |-
+        Expected values to be strictly equal:
+
+        1 !== 2
+
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 2
+      actual: 1
+      operator: 'strictEqual'
+      stack: |-
+        TestContext.<anonymous> (<fixture>/value.test.cjs:9:30)
+        Test.runInAsyncScope (node:async_hooks:206:9)
+        Test.run (node:internal/test_runner/test:796:25)
+        Test.start (node:internal/test_runner/test:702:17)
+        node:internal/test_runner/test:1133:71
+        node:internal/per_context/primordials:482:82
+        new Promise (<anonymous>)
+        new SafePromise (node:internal/per_context/primordials:450:29)
+        node:internal/per_context/primordials:482:9
+        Array.map (<anonymous>)
+      ...
+    1..1
+not ok 2 - suite
+  ---
+  duration_ms: 0.200625
+  type: 'suite'
+  location: '<fixture>/value.test.cjs:8:1'
+  failureType: 'subtestsFailed'
+  error: '1 subtest failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+1..2
+# tests 4
+# suites 1
+# pass 0
+# fail 4
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 40.257875
