@@ -121,13 +121,15 @@ dv init --implementer model-a --base main
 
 ### Focused runner contract
 
-`test_runner` defaults to `auto`, detecting direct `python -m unittest`, `python -m pytest` / `pytest`, and `node --test` commands. Set it to `unittest`, `pytest`, or `node-test` when a wrapper runs one of these reporters. Both phases use the same command. Red must exit 1 and produce a complete assertion-only report:
+`test_runner` defaults to `auto`, detecting direct `python -m unittest`, `python -m pytest` / `pytest`, and `node --test` commands. Both phases use the same recipe. For direct Python commands, `dv` adds its bundled phase probe: a unittest launcher or a pytest plugin, using the selected interpreter and installed runner. The probe adds a `DV-RUNNER-PHASES` record to the log without new runtime dependencies. Red must exit 1 and produce a complete assertion-only report:
 
 | Runner | Required red output |
 | --- | --- |
-| Python unittest | `FAILED (failures=N)` with positive failures, no errors, and `AssertionError` in every failure traceback. Setup/teardown failures are rejected. |
-| pytest | Default/long traceback report (`--tb=long`), positive failed count, every failure ending in `AssertionError`, no collection/setup/teardown errors. Short/line/hidden traceback modes are unsupported; runtime exceptions also use exit 1, so exit status alone is insufficient. |
+| Python unittest | `FAILED (failures=N)` with positive failures, no errors, and `AssertionError` in every failure traceback. The phase probe must establish test-body execution for every failure; setup, teardown, `addCleanup` and `addAsyncCleanup` failures are rejected. |
+| pytest | Default/long traceback report (`--tb=long`), positive failed count, every failure ending in `AssertionError`, and test-body phase evidence. Fixture setup/finalizer failures and unittest lifecycle failures are rejected, even when pytest labels them `FAILED`. Short/line/hidden traceback modes are unsupported. |
 | Node.js test runner | `node --test --test-reporter=tap`: positive `# fail`, zero cancelled tests, each failed test reporting `failureType: 'testCodeFailure'` and `code: 'ERR_ASSERTION'`. |
+
+Wrapper commands must declare `test_runner`. Python wrappers also need to run the bundled probe (`python -m dv._runner_probe` for unittest, `python -m pytest -p dv._runner_probe` for pytest), with `dv` importable in that interpreter. A declared runner alone supplies no phase evidence. Missing, incomplete or ambiguous phase records fail closed. Static and full-suite commands are not instrumented.
 
 Unsupported reporters, including Jest/Vitest, bare scripts, and suppressed tracebacks fail closed. Static and full-suite commands remain unrestricted. The `red assertion` check distinguishes assertion proof from import, runtime, collection, or fixture errors, even if green passes. The gate rechecks the saved log against the same contract. A reviewer still verifies that the failing assertion tests the intended regression; printed output is trusted local evidence, not authenticated proof.
 

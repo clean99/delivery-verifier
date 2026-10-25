@@ -123,13 +123,15 @@ dv init --implementer model-a --base main
 
 ### 回归命令：按运行器核对断言
 
-`test_runner` 默认为 `auto`，识别直接调用的 `python -m unittest`、`python -m pytest` / `pytest` 和 `node --test`。包装命令运行这些报告器时，显式指定 `unittest`、`pytest` 或 `node-test`。两个阶段执行同一条命令，red 必须退出 1，并输出完整的断言失败报告：
+`test_runner` 默认为 `auto`，识别直接调用的 `python -m unittest`、`python -m pytest` / `pytest` 和 `node --test`。两个阶段使用相同的测试配置。直接调用 Python 运行器时，`dv` 会接入内置的阶段探针：unittest 使用启动器，pytest 使用插件，继续沿用命令指定的解释器及已安装的运行器。探针将 `DV-RUNNER-PHASES` 记录写入日志，运行时依赖保持不变。Red 必须退出 1，并输出完整的断言失败报告：
 
 | 运行器 | Red 输出要求 |
 | --- | --- |
-| Python unittest | `FAILED (failures=N)` 中失败数大于零、错误数为零，每份失败堆栈均为 `AssertionError`。setup/teardown 失败会被拒绝。 |
-| pytest | 保留默认或完整堆栈（`--tb=long`）及汇总，失败数大于零，每项失败终止于 `AssertionError`，collection/setup/teardown 错误数为零。short/line/隐藏堆栈格式暂不支持。运行异常也会退出 1，因此还需核对日志。 |
+| Python unittest | `FAILED (failures=N)` 中失败数大于零、错误数为零，每份失败堆栈均为 `AssertionError`。探针需确认每项失败发生在测试主体中；setup、teardown、`addCleanup` 和 `addAsyncCleanup` 失败均会被拒绝。 |
+| pytest | 保留默认或完整堆栈（`--tb=long`）及汇总，失败数大于零，每项失败终止于 `AssertionError`，并有测试主体阶段证据。Fixture 初始化、清理及 unittest 生命周期中的失败均会被拒绝，包括 pytest 将其标成 `FAILED` 的情况。short/line/隐藏堆栈格式暂不支持。 |
 | Node.js test runner | 使用 `node --test --test-reporter=tap`，`# fail` 大于零、cancelled 为零，每项失败均报告 `failureType: 'testCodeFailure'` 和 `code: 'ERR_ASSERTION'`。 |
+
+包装命令需显式指定 `test_runner`。Python 包装命令还需接入内置探针：unittest 用 `python -m dv._runner_probe`，pytest 用 `python -m pytest -p dv._runner_probe`，对应解释器中需能导入 `dv`。阶段记录缺失、不完整或有歧义时，回归证明失败。静态检查和完整测试沿用原命令。
 
 Jest/Vitest、裸脚本、隐藏堆栈等暂不支持的报告格式会验证失败。静态检查和完整测试命令保持原有自由度。`red assertion` 单列断言验证结果：即使 green 通过，导入、运行、收集用例或测试准备错误也会被拒绝。Gate 会重新解析已保存的日志。评审者仍需核对失败断言是否对应目标回归；日志依赖本地命令如实输出。
 

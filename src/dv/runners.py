@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import os
 import re
 from pathlib import Path
 
@@ -25,13 +27,51 @@ def runner_for(command: list[str], declared: str = "auto") -> str:
     return "unsupported"
 
 
+def instrument(command: list[str], env: dict[str, str]) -> list[str]:
+    runner = runner_for(command)
+    if runner == "unittest":
+        index = command.index("-m")
+        return [
+            *command[:index],
+            str(Path(__file__).with_name("_runner_probe.py")),
+            *command[index + 2 :],
+        ]
+    if runner == "pytest":
+        package_root = str(Path(__file__).resolve().parent.parent)
+        env["PYTHONPATH"] = os.pathsep.join(filter(None, (package_root, env.get("PYTHONPATH"))))
+        index = 1 if Path(command[0]).name in ("pytest", "py.test") else command.index("-m") + 2
+        return [*command[:index], "-p", "dv._runner_probe", *command[index:]]
+    return command
+
+
+def body_assertions(text: str, runner: str, failures: int) -> bool:
+    records = re.findall(r"^DV-RUNNER-PHASES (.+)$", text, re.M)
+    if len(records) != 1:
+        return False
+    try:
+        record = json.loads(records[0])
+    except ValueError:
+        return False
+    return (
+        isinstance(record, dict)
+        and record.get("runner") == runner
+        and isinstance(record.get("body_assertions"), list)
+        and len(record["body_assertions"]) == failures
+        and all(value is True for value in record["body_assertions"])
+    )
+
+
 def unittest_assertions(text: str) -> bool:
     summaries = re.findall(r"^FAILED \(([^\n]+)\)$", text, re.M)
     if len(summaries) != 1 or re.search(r"^ERROR: |unexpected successes=", text, re.M):
         return False
     counts = dict(re.findall(r"(\w+)=(\d+)", summaries[0]))
     failures = int(counts.get("failures", 0))
-    if not failures or int(counts.get("errors", 0)):
+    if (
+        not failures
+        or int(counts.get("errors", 0))
+        or not body_assertions(text, "unittest", failures)
+    ):
         return False
     blocks = re.findall(r"^FAIL: ([^\n]+)\n-+\n(.*?)(?=\n[-=]{5,}\n)", text, re.M | re.S)
     return len(blocks) == failures and all(
@@ -52,7 +92,7 @@ def pytest_assertions(text: str) -> bool:
     failures = int(summaries[0])
     body = re.split(r"^=+ short test summary info =+", sections[1], flags=re.M)[0]
     blocks = re.split(r"^_+ [^\n]+ _+\n", body, flags=re.M)[1:]
-    if len(blocks) != failures or not failures:
+    if len(blocks) != failures or not failures or not body_assertions(text, "pytest", failures):
         return False
     for block in blocks:
         terminal = re.findall(r"^\S.*:\d+: (\w+)\s*$", block, re.M)
@@ -100,7 +140,7 @@ def red_assertion(phase: dict, content: bytes, runner: str) -> tuple[bool, str]:
     if not validators[runner](text):
         return False, (
             f"{runner}: red has errors or lacks assertion-only failure output; "
-            "import, runtime, collection, setup/teardown errors "
-            "and incomplete reports are not proof"
+            "import, runtime, collection, setup/teardown/cleanup errors "
+            "and reports without test-body phase evidence are not proof"
         )
     return True, f"{runner}: red failed at assertions with no runner errors"

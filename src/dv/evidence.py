@@ -18,7 +18,7 @@ from dv.common import (
 )
 from dv.item import Item
 from dv.redgreen import phase_ok, plan
-from dv.runners import red_assertion, runner_for
+from dv.runners import instrument, red_assertion, runner_for
 
 
 def model_of(name: str) -> str:
@@ -169,7 +169,7 @@ def redgreen_checks(item: Item) -> list[dict]:
                     f"{name} is not a normal {'failing' if name == 'red' else 'passing'} command"
                 )
             if (
-                phase.get("argv") != item.meta["test_command"]
+                phase.get("argv") != instrument(item.meta["test_command"], {})
                 or phase.get("timeout_seconds") != timeout
             ):
                 raise ValueError("Phase recipe does not match recorded proof")

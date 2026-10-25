@@ -15,7 +15,7 @@ from typing import Iterator
 from dv import hygiene, process
 from dv.common import DVError, atomic_bytes, digest, result, row, write_json
 from dv.item import Item
-from dv.runners import red_assertion, runner_for
+from dv.runners import instrument, red_assertion, runner_for
 
 
 def pure_explicit_test(file: hygiene.DiffFile) -> bool:
@@ -155,7 +155,9 @@ def path_state(path: Path) -> dict:
 def run_phase(item: Item, phase: str, command: list[str], cwd: Path, timeout: int) -> dict:
     with tempfile.TemporaryDirectory(prefix=f".{phase}-cache-", dir=item.path.parent) as cache:
         env = {**os.environ, "PYTHONPYCACHEPREFIX": cache, "PYTHONDONTWRITEBYTECODE": "1"}
-        return process.run(command, cwd, item.file(f"redgreen-{phase}.log"), timeout, env=env)
+        return process.run(
+            instrument(command, env), cwd, item.file(f"redgreen-{phase}.log"), timeout, env=env
+        )
 
 
 def run(item: Item, timeout: int | None = None) -> dict:

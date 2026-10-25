@@ -127,7 +127,7 @@ class ReleaseContractTests(unittest.TestCase):
                     phase = {"status": "normal", "exit_code": 1}
                     selected = "node-test" if runner == "node" else runner
                     valid, detail = red_assertion(phase, content, selected)
-                    self.assertEqual(valid, case == "assertion", detail)
+                    self.assertEqual(valid, runner == "node" and case == "assertion", detail)
                     if valid:
                         for code in (0, 2, 124, True):
                             phase["exit_code"] = code
