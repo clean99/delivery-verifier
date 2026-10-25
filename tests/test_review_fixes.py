@@ -66,7 +66,7 @@ class ReviewFixTests(unittest.TestCase):
     def test_C3_actual_green_interrupt_invalidates_old_success(self):
         box = self.box()
         box.write(
-            "tests/test_value.py",
+            "checks/test_interrupt.py",
             "import os, signal, time, unittest\nfrom pathlib import Path\n"
             "class ValueTests(unittest.TestCase):\n"
             "    def test_value(self):\n"
@@ -77,6 +77,10 @@ class ReviewFixTests(unittest.TestCase):
             "        self.assertEqual(good, True)\n",
         )
         box.commit()
+        box.update(
+            test_command=[sys.executable, "-m", "unittest", "discover", "-s", "checks"],
+            test_files=["tests/test_value.py", "checks/test_interrupt.py"],
+        )
         box.ready()
         self.assertTrue(gate.run(box.item)["ok"])
         box.write(".dv/interrupt", "yes")
