@@ -15,7 +15,7 @@ A green test suite can still leave you with an unverified change:
 - The implementer's model reviews its own change in the same context and misses the same mistake.
 - You approve a commit, then the agent amends it. The old approval says nothing about the new code.
 
-`dv` removes the production fix while retaining the regression test, runs it, restores the fix, and runs the same command again. It rejects a test that stays green. The gate also reruns your repository checks, inspects the diff, and validates review and approval against the current inputs.
+`dv` removes the production fix while retaining the regression test, runs it, restores the fix, and runs the same command again. Red must fail at assertions under a supported test runner; errors before the assertion and tests that stay green are rejected. The gate also reruns your repository checks, inspects the diff, and validates review and approval against the current inputs.
 
 ## Try it in 60 seconds
 
@@ -64,20 +64,22 @@ dv --help
 
 These commands install the local source, not a published package. Installation needs setuptools at build time; an offline install needs locally available build tooling. Once installed, `dv` uses Python's standard library and your local Git executable. The demo works directly from source without either installer.
 
+The source distribution includes the demo, complete tests, and referenced documentation. The wheel also installs these resources under `<environment>/share/delivery-verifier`, retaining the source layout. From that directory, run `python examples/demo/run.py` or `PYTHONPATH=src python -m unittest discover -s tests -v` in a writable environment; use the environment's Python. These resources are local examples, not installed top-level test packages.
+
 ## The verification ladder
 
 | Level | Evidence | What `dv` checks |
 | --- | --- | --- |
 | V0 claim | Work-item summary and optional delivery text | Records what changed; a claim is not a passing check. |
 | V1 mechanical checks | Diff hygiene, configured static checks, full test suite | Recomputes hygiene and reruns every configured command. |
-| V2 regression proof | Focused test fails without the fix and passes with it | Records both runs and logs; rejects all-green tests, timeouts, and launch failures. |
+| V2 regression proof | Focused test fails without the fix and passes with it | Records both runs and logs; requires assertion-only red failures, rejects runner errors, all-green tests, timeouts, and launch failures. |
 | V3 runtime | Optional local demo, screenshot, or runtime log | Binds nonempty files to review. Runtime behavior is a reviewer attestation, not an automatic replay. |
 | V4 independent review | Report for the current commit and inputs | Requires a passing report and a different model identifier. Small changes may use an explicit same-model fresh-context exception, shown as a warning. |
 | V5 human approval | A person's decision on the exact reviewed change | Requires matching commit, configuration, review, description, and runtime evidence. |
 
 `dv gate` checks readiness: V1, V2, and V4, plus supplied V3 attachments. `dv gate --require-approval` also checks V5. Warnings remain visible; a reasoned test waiver is reported as skipped, never as reproduced proof.
 
-A new commit or amendment invalidates prior evidence. Changes to the merge base, item settings, effective configuration, delivery text, or runtime files also require fresh evidence. Changing the review invalidates approval. Cached `gate.json` is never an authorization input.
+A new commit or amendment invalidates prior evidence. Evidence also binds a SHA-256 digest of the installed checker's Python sources, including its version and bundled parser. Updating or editing the checker invalidates red/green proof, review, and approval; records without this binding must be regenerated. Changes to the merge base, item settings, effective configuration, delivery text, or runtime files also require fresh evidence. Changing the review invalidates approval. Cached `gate.json` is never an authorization input.
 
 ## Use it on your change
 
@@ -114,6 +116,18 @@ dv init --implementer model-a --base main
   "exceptions": {}
 }
 ```
+
+### Focused runner contract
+
+`test_runner` defaults to `auto`, detecting direct `python -m unittest`, `python -m pytest` / `pytest`, and `node --test` commands. Set it to `unittest`, `pytest`, or `node-test` when a wrapper runs one of these reporters. Both phases use the same command. Red must exit 1 and produce a complete assertion-only report:
+
+| Runner | Required red output |
+| --- | --- |
+| Python unittest | `FAILED (failures=N)` with positive failures, no errors, and `AssertionError` in every failure traceback. Setup/teardown failures are rejected. |
+| pytest | Default traceback report (`--tb=short` also works), positive failed count, every failure ending in `AssertionError`, no collection/setup/teardown errors. Keep tracebacks and summary enabled; runtime exceptions also use exit 1, so exit status alone is insufficient. |
+| Node.js test runner | `node --test --test-reporter=tap`: positive `# fail`, zero cancelled tests, each failed test reporting `failureType: 'testCodeFailure'` and `code: 'ERR_ASSERTION'`. |
+
+Unsupported reporters, including Jest/Vitest, bare scripts, and suppressed tracebacks fail closed. Static and full-suite commands remain unrestricted. The `red assertion` check distinguishes assertion proof from import, runtime, collection, or fixture errors, even if green passes. The gate rechecks the saved log against the same contract. A reviewer still verifies that the failing assertion tests the intended regression; printed output is trusted local evidence, not authenticated proof.
 
 Paths are relative to the repository root. An optional `description_file` points to ignored local delivery text, such as `.dv/description.txt`; `runtime_files` references ignored evidence files. Use a separate ignored directory for each additional item.
 

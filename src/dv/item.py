@@ -6,13 +6,16 @@ import copy
 from pathlib import Path
 
 from dv import config
+from dv.checker import checker_digest
 from dv.common import DVError, argv, canonical, digest, keys, nonblank, read_json, write_json
 from dv.git import Repo
+from dv.runners import RUNNERS
 
 DEFAULTS = {
     "kind": "small",
     "status": "preparing",
     "test_cwd": ".",
+    "test_runner": "auto",
     "test_files": [],
     "runtime_files": [],
     "exceptions": {},
@@ -84,8 +87,10 @@ class Item:
             for key, value in self.meta.items()
             if key not in {"status", "blocked_reason"}
         }
+        checker = checker_digest()
         self.scope = {
             "schema_version": 1,
+            "checker_sha256": checker,
             "head_sha": self.head,
             "base_sha": self.base,
             "context_sha256": digest(
@@ -93,6 +98,7 @@ class Item:
                     {
                         "item": bound,
                         "config": self.config,
+                        "checker_sha256": checker,
                         "head_sha": self.head,
                         "base_sha": self.base,
                         "attachments": self.attachments,
@@ -136,6 +142,8 @@ class Item:
         )
         for key, value in m["exceptions"].items():
             nonblank(value, key)
+        if not isinstance(m["test_runner"], str) or m["test_runner"] not in RUNNERS:
+            raise DVError("test_runner must be auto, unittest, pytest, or node-test")
         if "test_command" in m:
             argv(m["test_command"], "test_command")
         elif not m["exceptions"].get("no_test_reason") and not (

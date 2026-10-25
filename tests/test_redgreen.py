@@ -51,17 +51,15 @@ class RedGreenTests(unittest.TestCase):
             new={"src/removed file.ts": None, "src/new file.ts": "new\n"},
         )
         (box.root / "src/new file.ts").chmod(0o755)
-        box.commit()
-        box.update(
-            test_command=[
-                sys.executable,
-                "-c",
-                (
-                    "from pathlib import Path; assert Path('src/new file.ts').exists()"
-                    "; assert not Path('src/removed file.ts').exists()"
-                ),
-            ]
+        box.write(
+            "tests/test_value.py",
+            "from pathlib import Path\nimport unittest\n"
+            "class PathTests(unittest.TestCase):\n"
+            "    def test_paths(self):\n"
+            "        self.assertTrue(Path('src/new file.ts').exists())\n"
+            "        self.assertFalse(Path('src/removed file.ts').exists())\n",
         )
+        box.commit()
         index = box.item.repo.index()
         self.assertTrue(redgreen.run(box.item)["ok"])
         self.assertFalse((box.root / "src/removed file.ts").exists())

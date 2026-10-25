@@ -14,6 +14,10 @@
 
 ### Fixed
 
+- Bind all evidence to a location-independent digest of checker sources; reject missing or stale checker bindings, including after upgrades.
+- Require assertion-only red output from unittest, pytest, or Node TAP; reject import, runtime, collection, and fixture errors even when green passes. Revalidate saved red logs at the gate. Other reporters fail closed.
+- Include complete tests, fixtures, demo, and referenced documentation in source distributions and wheel resources.
+
 - Preserve ignored local files at deleted source paths; invalidate proof at attempt start and reject incomplete proof or recovery plans.
 - Separate Python bytecode caches between proof phases; retain content/type/mode mutation evidence for baseline-only files.
 - Fail closed on hook interruption, abnormal exit, and timeout; require Claude Code 2.1.310+ and omit existing settings from installer output.

@@ -18,6 +18,7 @@ from dv.common import (
 )
 from dv.item import Item
 from dv.redgreen import phase_ok, plan
+from dv.runners import red_assertion, runner_for
 
 
 def model_of(name: str) -> str:
@@ -158,6 +159,9 @@ def redgreen_checks(item: Item) -> list[dict]:
         timeout = record.get("timeout_seconds")
         if type(timeout) is not int or timeout <= 0:
             raise ValueError("Malformed proof timeout")
+        runner = runner_for(item.meta["test_command"], item.meta["test_runner"])
+        if record.get("runner") != runner:
+            raise ValueError("Focused test runner changed or is missing")
         for name in ("red", "green"):
             phase = record.get(name)
             if not phase_ok(phase, red=name == "red"):
@@ -169,8 +173,13 @@ def redgreen_checks(item: Item) -> list[dict]:
                 or phase.get("timeout_seconds") != timeout
             ):
                 raise ValueError("Phase recipe does not match recorded proof")
-            if digest(item.file(f"redgreen-{name}.log").read_bytes()) != phase.get("log_sha256"):
+            content = item.file(f"redgreen-{name}.log").read_bytes()
+            if digest(content) != phase.get("log_sha256"):
                 raise ValueError(f"{name} log changed")
+            if name == "red":
+                asserted, detail = red_assertion(phase, content, runner)
+                if not asserted:
+                    raise ValueError(detail)
         rows = record.get("checks")
         if (
             not isinstance(rows, list)
@@ -184,7 +193,7 @@ def redgreen_checks(item: Item) -> list[dict]:
             row(
                 "V2 red/green",
                 "pass",
-                "Normal failing red, passing green; both log hashes verified",
+                "Assertion-only red, passing green; both log hashes verified",
             )
         ]
     except (DVError, OSError, ValueError, TypeError) as error:

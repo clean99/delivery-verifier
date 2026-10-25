@@ -64,18 +64,19 @@ class ReviewFixTests(unittest.TestCase):
                 self.assertEqual((box.root / "src/value.ts").read_text(), "fixed\n")
 
     def test_C3_actual_green_interrupt_invalidates_old_success(self):
-        command = [
-            sys.executable,
-            "-c",
-            (
-                "import os,signal,time; from pathlib import Path; "
-                "good=Path('src/value.ts').read_text().strip()=='fixed'; "
-                "interrupt=good and Path('.dv/interrupt').exists(); "
-                "os.kill(os.getppid(),signal.SIGINT) if interrupt else None; "
-                "time.sleep(30) if interrupt else None; raise SystemExit(0 if good else 1)"
-            ),
-        ]
-        box = self.box(command=command)
+        box = self.box()
+        box.write(
+            "tests/test_value.py",
+            "import os, signal, time, unittest\nfrom pathlib import Path\n"
+            "class ValueTests(unittest.TestCase):\n"
+            "    def test_value(self):\n"
+            "        good = Path('src/value.ts').read_text().strip() == 'fixed'\n"
+            "        if good and Path('.dv/interrupt').exists():\n"
+            "            os.kill(os.getppid(), signal.SIGINT)\n"
+            "            time.sleep(30)\n"
+            "        self.assertEqual(good, True)\n",
+        )
+        box.commit()
         box.ready()
         self.assertTrue(gate.run(box.item)["ok"])
         box.write(".dv/interrupt", "yes")

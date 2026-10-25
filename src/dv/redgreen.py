@@ -15,6 +15,7 @@ from typing import Iterator
 from dv import hygiene, process
 from dv.common import DVError, atomic_bytes, digest, result, row, write_json
 from dv.item import Item
+from dv.runners import red_assertion, runner_for
 
 
 def pure_explicit_test(file: hygiene.DiffFile) -> bool:
@@ -129,7 +130,7 @@ def phase_ok(phase: object, *, red: bool = False) -> bool:
     if not isinstance(phase, dict) or phase.get("status") != "normal":
         return False
     code = phase.get("exit_code")
-    return type(code) is int and (0 < code < 124 if red else code == 0)
+    return type(code) is int and code == (1 if red else 0)
 
 
 def path_state(path: Path) -> dict:
@@ -278,10 +279,13 @@ def run(item: Item, timeout: int | None = None) -> dict:
         green = None
         if not checks and red["status"] not in ("timeout", "launch_error", "signal"):
             green = run_phase(item, "green", command, cwd, timeout)
+        runner = runner_for(command, item.meta["test_runner"])
+        asserted, detail = red_assertion(red, item.file("redgreen-red.log").read_bytes(), runner)
+        checks.append(row("red assertion", "pass" if asserted else "fail", detail))
         checks.append(
             row(
                 "red/green",
-                "pass" if phase_ok(red, red=True) and phase_ok(green) else "fail",
+                "pass" if asserted and phase_ok(green) else "fail",
                 f"red={red['exit_code']} ({red['status']}), green={green}",
                 (
                     "Inspect the logs: the focused regression must fail without the fi"
@@ -305,6 +309,7 @@ def run(item: Item, timeout: int | None = None) -> dict:
             item.scope,
             checks,
             argv=command,
+            runner=runner,
             cwd=item.meta["test_cwd"],
             retained_tests=retained,
             reverted_paths=reverted,
