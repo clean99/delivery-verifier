@@ -1,0 +1,10 @@
+include README.md README.zh-CN.md CONTRIBUTING.md SECURITY.md CHANGELOG.md LICENSE
+include docs/design.md
+include examples/demo/run.py
+include tests/*.py
+recursive-include tests/fixtures *.log *.json
+recursive-include src/dv *.py LICENSE NOTICE
+include .github/workflows/*.yml
+prune artifacts
+prune .dv
+global-exclude __pycache__ *.py[cod] .DS_Store

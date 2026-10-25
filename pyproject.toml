@@ -20,10 +20,20 @@ where = ["src"]
 [tool.setuptools.package-data]
 dv = ["_vendor/NOTICE", "_vendor/tomllib/LICENSE"]
 
+[tool.setuptools.data-files]
+"share/delivery-verifier" = ["README.md", "README.zh-CN.md", "CONTRIBUTING.md", "SECURITY.md", "CHANGELOG.md", "LICENSE", "pyproject.toml", "MANIFEST.in"]
+"share/delivery-verifier/docs" = ["docs/design.md"]
+"share/delivery-verifier/examples/demo" = ["examples/demo/run.py"]
+"share/delivery-verifier/tests" = ["tests/*.py"]
+"share/delivery-verifier/tests/fixtures/runners" = ["tests/fixtures/runners/*.log", "tests/fixtures/runners/*.json"]
+"share/delivery-verifier/src/dv" = ["src/dv/*.py"]
+"share/delivery-verifier/src/dv/_vendor" = ["src/dv/_vendor/__init__.py", "src/dv/_vendor/NOTICE"]
+"share/delivery-verifier/src/dv/_vendor/tomllib" = ["src/dv/_vendor/tomllib/*.py", "src/dv/_vendor/tomllib/LICENSE"]
+
 [tool.ruff]
 target-version = "py310"
 line-length = 100
-extend-exclude = ["src/dv/_vendor"]
+extend-exclude = ["src/dv/_vendor", "artifacts"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]
