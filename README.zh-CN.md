@@ -126,7 +126,7 @@ dv init --implementer model-a --base main
 | 运行器 | Red 输出要求 |
 | --- | --- |
 | Python unittest | `FAILED (failures=N)` 中失败数大于零、错误数为零，每份失败堆栈均为 `AssertionError`。setup/teardown 失败会被拒绝。 |
-| pytest | 保留默认堆栈或 `--tb=short` 及汇总，失败数大于零，每项失败终止于 `AssertionError`，collection/setup/teardown 错误数为零。运行异常也会退出 1，因此还需核对日志。 |
+| pytest | 保留默认或完整堆栈（`--tb=long`）及汇总，失败数大于零，每项失败终止于 `AssertionError`，collection/setup/teardown 错误数为零。short/line/隐藏堆栈格式暂不支持。运行异常也会退出 1，因此还需核对日志。 |
 | Node.js test runner | 使用 `node --test --test-reporter=tap`，`# fail` 大于零、cancelled 为零，每项失败均报告 `failureType: 'testCodeFailure'` 和 `code: 'ERR_ASSERTION'`。 |
 
 Jest/Vitest、裸脚本、隐藏堆栈等暂不支持的报告格式会验证失败。静态检查和完整测试命令保持原有自由度。`red assertion` 单列断言验证结果：即使 green 通过，导入、运行、收集用例或测试准备错误也会被拒绝。Gate 会重新解析已保存的日志。评审者仍需核对失败断言是否对应目标回归；日志依赖本地命令如实输出。

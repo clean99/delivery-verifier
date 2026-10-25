@@ -124,7 +124,7 @@ dv init --implementer model-a --base main
 | Runner | Required red output |
 | --- | --- |
 | Python unittest | `FAILED (failures=N)` with positive failures, no errors, and `AssertionError` in every failure traceback. Setup/teardown failures are rejected. |
-| pytest | Default traceback report (`--tb=short` also works), positive failed count, every failure ending in `AssertionError`, no collection/setup/teardown errors. Keep tracebacks and summary enabled; runtime exceptions also use exit 1, so exit status alone is insufficient. |
+| pytest | Default/long traceback report (`--tb=long`), positive failed count, every failure ending in `AssertionError`, no collection/setup/teardown errors. Short/line/hidden traceback modes are unsupported; runtime exceptions also use exit 1, so exit status alone is insufficient. |
 | Node.js test runner | `node --test --test-reporter=tap`: positive `# fail`, zero cancelled tests, each failed test reporting `failureType: 'testCodeFailure'` and `code: 'ERR_ASSERTION'`. |
 
 Unsupported reporters, including Jest/Vitest, bare scripts, and suppressed tracebacks fail closed. Static and full-suite commands remain unrestricted. The `red assertion` check distinguishes assertion proof from import, runtime, collection, or fixture errors, even if green passes. The gate rechecks the saved log against the same contract. A reviewer still verifies that the failing assertion tests the intended regression; printed output is trusted local evidence, not authenticated proof.
