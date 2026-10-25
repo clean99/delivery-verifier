@@ -56,7 +56,7 @@ One ignored directory holds `item.json` and its evidence alongside the working c
 | `test_files` | Relative paths to existing test files at `HEAD`, default `[]`. Supplements conventional test-path detection; it must not classify the production fix itself as a retained test. |
 | `description_file` | Optional relative path to the exact local delivery text, such as a proposed PR body or handoff note. No title or issue-reference format is imposed. Its bytes are checked and approval-bound. |
 | `runtime_files` | Relative paths to runtime evidence, default `[]`. Every file must exist and be nonempty, and its content hash is bound to review and approval. No file list means V3 is not claimed. |
-| `exceptions` | Object with optional nonblank string values: `no_test_reason`, `comment_justification`, and `lockfile_reason`. Each is printed in the gate and reviewed; a boolean is not a justification. |
+| `exceptions` | Object with optional nonblank string values: `no_test_reason`, `comment_justification`, `lockfile_reason`, and `weak_test_justification`. Each is printed in the gate and reviewed; a boolean is not a justification. |
 
 Metadata, evidence, and delivery text live in ignored paths so writing a gate result cannot invalidate its own commit. `dv init` adds the default `.dv/` entry to the repository-local Git exclude file without changing existing entries. A custom item directory must already be ignored. Reject tracked metadata paths, path traversal, and symlinks that escape the repository; do not write through symlinked metadata files. Source and test paths remain ordinary tracked files.
 
@@ -66,7 +66,7 @@ State moves `preparing` to `ready` after a successful readiness gate, and to `ap
 
 The inspected scope is the full `HEAD` commit ID plus the current merge-base commit ID. Abbreviated IDs are accepted as Git input only where a ref is expected; stored evidence and `--head` require full IDs (40 hexadecimal characters for SHA-1, 64 for SHA-256).
 
-Every result carries `schema_version`, `at` (UTC timestamp), `head_sha`, `base_sha`, and `context_sha256`. The context hash covers canonical JSON of the validated item with defaults (excluding only `status` and `blocked_reason`), effective configuration, both commit IDs, and the content hashes of the description/runtime files. Canonical JSON uses sorted keys, compact separators, UTF-8, and rejects non-finite numbers. Optional absent files have a null hash, not an empty-file hash.
+Work-item evidence records carry `schema_version`, `at` (UTC timestamp), `head_sha`, `base_sha`, and `context_sha256`. The initialization result has no context hash; the item is still an incomplete template. The context hash covers canonical JSON of the validated item with defaults (excluding only `status` and `blocked_reason`), effective configuration, both commit IDs, and the content hashes of the description/runtime files. Canonical JSON uses sorted keys, compact separators, UTF-8, and rejects non-finite numbers. Optional absent files have a null hash, not an empty-file hash.
 
 | Sidecar | Contents |
 | --- | --- |
@@ -119,7 +119,7 @@ dv gate .dv/item.json --require-approval
 3. Run the focused argument array from `test_cwd`, capturing a red log. No shell expansion occurs unless the user explicitly chooses a shell executable.
 4. In a `finally` path, restore every touched source path and file mode to `HEAD`, preserving the original index. Never use a broad hard reset or delete unrelated untracked files. Verify restoration before running green; if restoration fails, stop with an operational error and identify affected paths.
 5. Run the identical command with the full change restored and capture green. Recheck index/worktree, commit IDs, and context before persisting success. Test-created nonignored files or tracked mutations fail the proof and remain for inspection.
-6. Accept only a normal, nonzero red exit and green exit zero. Timeouts, signal termination, command-not-found/launch failures, and restoration failures never count as red. The default timeout is 1,800 seconds per phase. A timeout kills and reaps the child process group before restoration on supported POSIX systems.
+6. Accept only a normal red exit from 1 through 123 and green exit zero. Exit codes 124 and above are rejected, as are timeouts, signal termination, command-not-found/launch failures, and restoration failures. The default timeout is 1,800 seconds per phase. A timeout kills and reaps the child process group before restoration on supported POSIX systems.
 
 Each attempt atomically replaces old proof with `state: "running"` and `ok: false` before planning or changing source. A completed run atomically publishes `state: "complete"` only after both phases and cleanup checks. The gate rejects incomplete attempts and leftover restoration plans, including when a test waiver is configured. Before mutation, paths absent from `HEAD` must also be absent locally, including ignored files, directories, and dangling symlinks.
 
@@ -238,7 +238,7 @@ Required acceptance coverage as those modules land:
 - Hook installation preserves unrelated settings and is idempotent; payload handling, push target/ref checks, malformed inputs, Stop retry bounds, and nondefault item locations have deterministic tests.
 - Python 3.10 and a current Python version parse the same valid/invalid configuration fixtures. Package install creates a working `dv` entry point with no third-party runtime dependencies.
 
-Run `PYTHONPATH=src python -m unittest discover -s tests -v`. Lint with offline Ruff when available, otherwise pyflakes, otherwise `python -m compileall -q src tests`. Compileall is syntax validation, not a substitute for a future full linter.
+Run `PYTHONPATH=src python -m unittest discover -s tests -v` and `ruff check .` with Ruff 0.17.1, as CI does. If Ruff is unavailable offline, `python -m compileall -q src tests examples` provides syntax validation only; it does not complete the required Ruff check.
 
 ## Deliberate non-goals
 
