@@ -127,13 +127,15 @@ dv init --implementer model-a --base main
 
 | 运行器 | Red 输出要求 |
 | --- | --- |
-| Python unittest | `FAILED (failures=N)` 中失败数大于零、错误数为零，每份失败堆栈均为 `AssertionError`。探针需确认每项失败发生在测试主体中；setup、teardown、`addCleanup` 和 `addAsyncCleanup` 失败均会被拒绝。 |
-| pytest | 保留默认或完整堆栈（`--tb=long`）及汇总，失败数大于零，每项失败终止于 `AssertionError`，并有测试主体阶段证据。Fixture 初始化、清理及 unittest 生命周期中的失败均会被拒绝，包括 pytest 将其标成 `FAILED` 的情况。short/line/隐藏堆栈格式暂不支持。 |
+| Python unittest | `FAILED (failures=N)` 中失败数大于零、错误数为零，每份失败堆栈均为 `AssertionError`。探针需确认每项失败发生在测试方法执行期间；`setUp`、`tearDown`、`addCleanup` 和 `addAsyncCleanup` 失败均会被拒绝。 |
+| pytest | 保留默认或完整堆栈（`--tb=long`）及汇总，失败数大于零，每项失败终止于 `AssertionError`，并有 call 阶段证据。排除 setup/teardown 阶段、用例收集错误及 unittest 生命周期失败，包括 pytest 将 unittest 生命周期失败标成 `FAILED` 的情况。short/line/隐藏堆栈格式暂不支持。 |
 | Node.js test runner | 使用 `node --test --test-reporter=tap`，`# fail` 大于零、cancelled 为零，根本失败均报告 `failureType: 'testCodeFailure'` 和 `code: 'ERR_ASSERTION'`。`subtestsFailed` 父项需有失败子项；汇总计入父测试，排除 suite 容器。 |
 
 包装命令需显式指定 `test_runner`。Python 包装命令还需接入内置探针：unittest 用 `python -m dv._runner_probe`，pytest 用 `python -m pytest -p dv._runner_probe`，对应解释器中需能导入 `dv`。阶段记录缺失、不完整或有歧义时，回归证明失败。静态检查和完整测试沿用原命令。
 
-Jest/Vitest、裸脚本、隐藏堆栈等暂不支持的报告格式会验证失败。静态检查和完整测试命令保持原有自由度。`red assertion` 单列断言验证结果：即使 green 通过，导入、运行、收集用例或测试准备错误也会被拒绝。Gate 会重新解析已保存的日志。评审者仍需核对失败断言是否对应目标回归；日志依赖本地命令如实输出。
+对 unittest，`dv` 将测试方法执行期间视为测试主体，包括方法调用的辅助函数和子测试，排除 `setUp`/`tearDown`、对应的异步方法及清理回调。对 pytest 测试函数，边界是 **call 阶段**，涵盖调用测试函数期间运行的全部代码，包括通过 `request.getfixturevalue()` 动态请求的 fixture，以及 `conftest.py` 中的 `pytest_runtest_call` 等 call 阶段 hook。这两处的断言失败同样计入测试主体失败，即使断言位于测试函数自身语句之外。Pytest 的 setup/teardown 阶段和用例收集错误均被排除；由 pytest 执行的 unittest 用例仍按测试方法边界判断。评审者应阅读 red 日志，核对断言来源及其是否证明了目标回归。
+
+Jest/Vitest、裸脚本、隐藏堆栈等暂不支持的报告格式会验证失败。静态检查和完整测试命令保持原有自由度。`red assertion` 单列断言验证结果：即使 green 通过，导入、运行、用例收集或 setup/teardown 阶段错误也会被拒绝。Gate 会重新解析已保存的日志。日志依赖本地命令如实输出。
 
 路径均相对于仓库根目录。可选字段 `description_file` 指向已忽略的本地交付文案，例如 `.dv/description.txt`；`runtime_files` 指向已忽略的运行证据文件。多个工作项各用一个独立的忽略目录。
 
