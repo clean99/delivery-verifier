@@ -1,39 +1,44 @@
 # delivery-verifier
 
-**`dv` verifies an agent-made code change locally before you share it: regression proof, diff hygiene, independent review, and approval tied to the exact commit.**
+**`dv` checks that your regression test fails without the fix and passes with it, then binds review and approval records to the exact commit.**
+
+For people shipping changes written by coding agents. Runs locally with any agent that can execute a command.
 
 [简体中文](README.zh-CN.md) · [Design and configuration reference](docs/design.md)
 
-Works with Claude Code, Codex, or any coding agent that can run a local command. Python 3.10+, Git 2.38+, Linux/macOS. No third-party runtime dependencies, model calls, accounts, or telemetry. Version 0.1.0 is in development; the project name is provisional.
+![Offline demo: a hollow test is rejected, a real regression is proved, and delivery stays blocked without human approval.](docs/assets/demo.gif)
 
-## The problem
+*Actual CLI output from synthetic fixtures, excerpted and paced for reading. Review in the demo is a synthetic fixture; human approval is left absent.*
 
-A green test suite can still leave you with an unverified change:
+## Quick start
 
-- An agent fixes whitespace handling, then adds `assertIsNotNone(split_words("red   green"))`. That test passes on the broken implementation too.
-- A patch leaves `console.log(...)` in production code or `test.only(...)` in the suite. The relevant tests pass; the delivery is still unfinished.
-- The implementer's model reviews its own change in the same context and misses the same mistake.
-- You approve a commit, then the agent amends it. The old approval says nothing about the new code.
-
-`dv` removes the production fix while retaining the regression test, runs it, restores the fix, and runs the same command again. Red must fail at assertions under a supported test runner; errors before the assertion and tests that stay green are rejected. The gate also reruns your repository checks, inspects the diff, and validates review and approval against the current inputs.
-
-## Try it in 60 seconds
-
-From a source checkout, run:
+Python 3.10+, Git 2.38+, Linux/macOS. From a directory where you keep checkouts:
 
 ```sh
-python examples/demo/run.py
+git clone https://github.com/clean99/delivery-verifier.git
+cd delivery-verifier
+python3 examples/demo/run.py
 ```
 
-Use `python3` if that is your Python 3.10+ executable. No installation or download is needed. The script creates a throwaway Git repository inside the checkout's ignored `.dv/` directory and removes it afterward. It leaves your project files and Git configuration alone.
+After cloning, the demo runs offline from source with no installation, model calls, accounts, or third-party runtime dependencies. It creates a temporary repository under the checkout's ignored `.dv/` directory and removes it and its logs afterward. Your existing Git configuration stays unchanged.
 
-The demo changes `text.split(" ")` to `text.split()`, first with the hollow test above, then with an assertion on the returned words:
+**Current limits:** 0.1.0 is in development. Focused regression proof supports unittest, pytest and Node's TAP reporter; Jest/Vitest are unsupported. Commands run with your permissions, without a sandbox. A passing proof distinguishes the two implementations for the supplied test; a reviewer must still judge whether it tests the right behavior. Reviewer identities and approval records are self-reported, not authenticated. See [security and restoration limits](SECURITY.md).
+
+## What the demo checks
+
+The fix changes `text.split(" ")` to `text.split()`. A hollow test only checks that the result exists:
+
+```python
+self.assertIsNotNone(split_words("red   green"))
+```
+
+That passes on both implementations, so `dv redgreen` rejects it. Replace it with:
 
 ```python
 self.assertEqual(split_words("red   green"), ["red", "green"])
 ```
 
-You will see:
+Now the test fails at an assertion with the fix removed and passes once the fix is restored:
 
 ```text
 redgreen: FAIL (exit 1)
@@ -43,14 +48,17 @@ Hollow test rejected: it passes even with the fix removed.
 redgreen: PASS (exit 0)
   red=1, green=0
 Meaningful regression proved: red=1, green=0.
-...
-gate: PASS (exit 0)
-...
-gate: FAIL (exit 1)
-  [FAIL] V5 human approval: ...
 ```
 
-The readiness gate uses an explicitly **synthetic review fixture** so the demo runs offline. Real work needs a separate reviewer. The final delivery gate deliberately fails because the demo never fabricates human approval.
+The full demo also runs diff hygiene and the readiness gate using a **synthetic review fixture**. Its final delivery gate deliberately fails for missing human approval. Real work needs a separate reviewer and a real person's decision.
+
+The gate reruns your configured repository checks, flags issues such as focused tests and debug statements, and rejects stale evidence after the commit or reviewed inputs change.
+
+## Related tools
+
+[mutmut](https://github.com/boxed/mutmut) (Python) and [StrykerJS](https://github.com/stryker-mutator/stryker-js) test test-suite sensitivity by generating code mutations. `dv` checks a narrower counterfactual: revert the actual production change to its Git merge base, keep the new tests, and rerun the supplied regression command. It does not generate mutants or compute a mutation score.
+
+[pre-commit](https://github.com/pre-commit/pre-commit) manages multi-language Git hooks. You can use it to run checks, including a custom regression script. `dv` adds a prescribed red/green procedure and commit/input-bound evidence records. Keep your existing lint, test and review tools; `dv` neither replaces them nor supplies the reviewer.
 
 ## Install from a local checkout
 

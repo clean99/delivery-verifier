@@ -1,39 +1,44 @@
 # delivery-verifier
 
-**`dv` 在本机验证编码 Agent 的改动，把回归测试、代码检查、独立评审和人工批准绑定到同一份提交，再由你决定是否交付。**
+**`dv` 检查回归测试能否在撤去修复后失败、恢复修复后通过，并把评审和批准记录绑定到确切的提交。**
+
+面向需要交付编码 Agent 所写改动的开发者。在本机运行，适用于能执行命令的编码 Agent。
 
 [English](README.md) · [设计与配置参考](docs/design.md)
 
-适用于 Claude Code、Codex，以及能执行本地命令的编码 Agent。需要 Python 3.10+、Git 2.38+ 和 Linux/macOS。运行时仅依赖 Python 标准库，通过本地 Git 完成检查。工具本身无模型调用、账号或遥测。0.1.0 正在开发，项目名称暂定。
+![离线演示：拒绝空洞测试，证明有效回归，缺少人工批准时保持交付阻塞。](docs/assets/demo.gif)
 
-## 验证目标：找出绿灯后的遗漏
+*动图节选虚构示例的真实 CLI 输出，调整停留时间方便阅读。示例使用模拟评审记录，保留人工批准这一步。*
 
-测试全绿时，改动仍可能带着这些问题：
+## 快速体验：运行离线示例
 
-- Agent 修好了空格处理，新增测试却只写 `assertIsNotNone(split_words("red   green"))`。旧实现也返回列表，所以修复前后都能通过。
-- 生产代码留着 `console.log(...)`，或测试里留着 `test.only(...)`。前者带来调试输出，后者可能让其他用例被跳过。
-- 实现者用同一个模型、同一份上下文评审自己的改动，重复漏掉同一个问题。
-- 你批准后，Agent 又 amend 了提交。原批准对应的是修改前的代码。
-
-`dv` 保留新增测试，临时撤去生产代码的修复，执行测试，再恢复修复并执行同一条命令。Red 阶段要求受支持的测试运行器报告断言失败；两次全绿、导入或运行错误都会使回归证明失败。验证关卡还会重跑仓库检查，并核对评审、批准是否对应当前输入。
-
-## 快速体验：运行本地示例
-
-在源码目录中执行，约一分钟即可看完：
+准备 Python 3.10+、Git 2.38+ 和 Linux/macOS，在存放代码的目录执行：
 
 ```sh
-python examples/demo/run.py
+git clone https://github.com/clean99/delivery-verifier.git
+cd delivery-verifier
+python3 examples/demo/run.py
 ```
 
-系统只有 `python3` 时，用它替换命令中的 `python`，版本需为 3.10 或更高。示例直接读取源码，无需安装或下载。脚本在已忽略的 `.dv/` 目录里创建临时 Git 仓库，结束后删除临时仓库及日志，保留项目文件和原有 Git 配置。
+克隆后，示例直接读取源码离线运行，无需安装、模型调用、账号或第三方运行时依赖。脚本在已忽略的 `.dv/` 目录下创建临时仓库，结束后删除临时仓库及日志，保留原有 Git 配置。
 
-示例将 `text.split(" ")` 改为 `text.split()`，先配上只检查返回值存在的测试，再改成检查具体结果：
+**当前范围：** 0.1.0 正在开发。回归证明支持 unittest、pytest 和 Node 的 TAP 报告，Jest/Vitest 暂不支持。命令按当前用户权限执行，沙箱需另行准备。通过的证明说明该测试能区分两份实现，测试是否覆盖目标行为仍需评审者判断。评审者身份及批准记录依赖如实声明。安全与文件恢复的限制见 [SECURITY.md](SECURITY.md)。
+
+## 示例：检查连续空格的修复
+
+修复将 `text.split(" ")` 改为 `text.split()`。空洞测试只检查返回值存在：
+
+```python
+self.assertIsNotNone(split_words("red   green"))
+```
+
+两份实现都返回列表，所以测试都会通过，`dv redgreen` 拒绝这份证明。把断言换成具体结果：
 
 ```python
 self.assertEqual(split_words("red   green"), ["red", "green"])
 ```
 
-输出包含：
+现在，撤去修复时测试在断言处失败，恢复修复后通过：
 
 ```text
 redgreen: FAIL (exit 1)
@@ -43,14 +48,17 @@ Hollow test rejected: it passes even with the fix removed.
 redgreen: PASS (exit 0)
   red=1, green=0
 Meaningful regression proved: red=1, green=0.
-...
-gate: PASS (exit 0)
-...
-gate: FAIL (exit 1)
-  [FAIL] V5 human approval: ...
 ```
 
-为了全程离线演示，示例使用明确标注的**模拟评审记录**。实际改动需要另一位评审者检查。最后的交付关卡按预期失败：示例保留人工批准这一步，交给真正负责的人。
+完整示例还会检查代码差异，并用**模拟评审记录**演示就绪关卡。最后的交付关卡因缺少人工批准而按预期失败。真实改动需要独立评审者检查，并由本人作出批准决定。
+
+关卡会重跑已配置的仓库检查，标出聚焦测试和调试语句等问题。提交或评审输入变化后，原证据失效。
+
+## 同类工具：检查方式的区别
+
+[mutmut](https://github.com/boxed/mutmut) 面向 Python，[StrykerJS](https://github.com/stryker-mutator/stryker-js) 面向 JavaScript；它们生成代码变异，检查测试套件能否发现变化。`dv` 的范围更窄：将本次生产代码改动恢复到 Git 合并基点，保留新增测试，再运行指定的回归命令。变异生成和变异分数在当前范围之外。
+
+[pre-commit](https://github.com/pre-commit/pre-commit) 管理多语言 Git hook，可以运行检查，也可以接入自定义回归脚本。`dv` 提供约定好的 red/green 流程，并将证据记录绑定到提交及评审输入。已有 lint、测试和评审工具继续使用，评审者由你安排。
 
 ## 安装：使用本地源码
 
