@@ -19,9 +19,11 @@ HAS_PYTEST = importlib.util.find_spec("pytest") is not None
 
 
 class RunnerPhaseTests(unittest.TestCase):
-    def run_report(self, runner, source, *, probed=True, extra=()):
+    def run_report(self, runner, source, *, probed=True, extra=(), conftest=None):
         with tempfile.TemporaryDirectory() as directory:
             Path(directory, "test_value.py").write_text(textwrap.dedent(source))
+            if conftest is not None:
+                Path(directory, "conftest.py").write_text(textwrap.dedent(conftest))
             command = [sys.executable, "-m", runner]
             command += ["-q", "--tb=long", "-p", "no:cacheprovider"] if runner == "pytest" else []
             command += list(extra)
@@ -154,6 +156,40 @@ class RunnerPhaseTests(unittest.TestCase):
         """,
             True,
         )
+
+    @unittest.skipUnless(HAS_PYTEST, "pytest is optional runner test tooling")
+    def test_pytest_dynamic_fixture_assertion_counts_as_test_body(self):
+        content = self.assert_report(
+            "pytest",
+            """
+            import pytest
+            @pytest.fixture
+            def value():
+                assert 1 == 2, "dynamic fixture assertion"
+            def test_value(request):
+                request.getfixturevalue("value")
+            """,
+            True,
+        )
+        self.assertIn(b"AssertionError: dynamic fixture assertion", content)
+
+    @unittest.skipUnless(HAS_PYTEST, "pytest is optional runner test tooling")
+    def test_pytest_call_hook_assertion_counts_as_test_body(self):
+        content = self.assert_report(
+            "pytest",
+            """
+            def test_value():
+                raise RuntimeError("test function must not run")
+            """,
+            True,
+            conftest="""
+            import pytest
+            @pytest.hookimpl(tryfirst=True)
+            def pytest_runtest_call(item):
+                assert 1 == 2, "call hook assertion"
+            """,
+        )
+        self.assertIn(b"AssertionError: call hook assertion", content)
 
     @unittest.skipUnless(HAS_PYTEST, "pytest is optional runner test tooling")
     def test_pytest_hidden_tracebacks_still_fail_with_phase_evidence(self):
