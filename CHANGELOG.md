@@ -14,6 +14,7 @@
 
 ### Fixed
 
+- Preserve unittest subtest failure phases before Python 3.10 defers result callbacks; accept test-body assertions without accepting setup, teardown, cleanup, or runtime failures.
 - Require test-body phase evidence from the bundled Python runner probe; reject unittest setup, teardown and synchronous/asynchronous cleanup assertions, including when run through pytest. Uninstrumented Python wrappers now fail closed.
 - Reconcile nested Node TAP failures with parent tests and suite containers while requiring assertion failures in the children.
 - Normalize sdist owner fields and archive metadata, and set a stable `SOURCE_DATE_EPOCH` for reproducible local release builds.

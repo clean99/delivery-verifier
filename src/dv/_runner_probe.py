@@ -7,6 +7,7 @@ import os
 import runpy
 import sys
 import unittest
+from contextlib import contextmanager
 
 PREFIX = "DV-RUNNER-PHASES "
 
@@ -41,6 +42,18 @@ def run_unittest() -> None:
     failures = []
     original_failure = unittest.TestResult.addFailure
     original_subtest = unittest.TestResult.addSubTest
+    original_context = unittest.TestCase.subTest
+
+    @contextmanager
+    def subtest_context(test, *args, **kwargs):
+        with original_context(test, *args, **kwargs):
+            try:
+                yield
+            except BaseException:
+                if test._subtest is not None:
+                    # Python 3.10 delivers results after the phase's call stack has unwound.
+                    test._subtest._dv_test_body = unittest_body(sys.exc_info(), test, subtest=True)
+                raise
 
     def add_failure(result, test, error):
         failures.append(issubclass(error[0], AssertionError) and unittest_body(error, test))
@@ -49,10 +62,12 @@ def run_unittest() -> None:
     def add_subtest(result, test, subtest, error):
         if error is not None:
             failures.append(
-                issubclass(error[0], AssertionError) and unittest_body(error, test, subtest=True)
+                issubclass(error[0], AssertionError)
+                and getattr(subtest, "_dv_test_body", False)
             )
         return original_subtest(result, test, subtest, error)
 
+    unittest.TestCase.subTest = subtest_context
     unittest.TestResult.addFailure = add_failure
     unittest.TestResult.addSubTest = add_subtest
     try:

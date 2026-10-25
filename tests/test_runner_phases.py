@@ -109,20 +109,123 @@ class RunnerPhaseTests(unittest.TestCase):
     def test_pytest_unittest_lifecycle_failures(self):
         self.unittest_cases("pytest")
 
-    def test_unittest_subtests_and_helper_assertions(self):
-        for method, expected in (("test_value", True), ("setUp", False), ("tearDown", False)):
-            source = f"""
+    def unittest_subtest_cases(self, *, deferred=False):
+        reporter = ""
+        if deferred:
+            reporter = textwrap.dedent("""
                 import unittest
-                class Example(unittest.TestCase):
-                    def test_value(self):
-                        pass
-                    def check_value(self):
-                        self.assertEqual(1, 2)
-                    def {method}(self):
-                        with self.subTest(value=1):
-                            self.check_value()
+                class DeferredResult(unittest.TextTestResult):
+                    def startTest(self, test):
+                        self.pending = []
+                        super().startTest(test)
+                    def addSubTest(self, test, subtest, error):
+                        self.pending.append((test, subtest, error))
+                    def stopTest(self, test):
+                        for args in self.pending:
+                            super().addSubTest(*args)
+                        super().stopTest(test)
+                unittest.TextTestRunner.resultclass = DeferredResult
+            """)
+        for base, prefix in (("TestCase", ""), ("IsolatedAsyncioTestCase", "async ")):
+            methods = ["test_value", "setUp", "tearDown", "cleanup", "runtime", "mixed"]
+            if prefix:
+                methods += ["asyncSetUp", "asyncTearDown", "async_cleanup"]
+            for method in methods:
+                with self.subTest(base=base, method=method, deferred=deferred):
+                    body, hook = "pass", ""
+                    if method in ("test_value", "runtime", "mixed"):
+                        body = "self.check_value()"
+                    elif method == "cleanup":
+                        body = "self.addCleanup(self.check_value)"
+                    elif method == "async_cleanup":
+                        body = "self.addAsyncCleanup(self.async_check_value)"
+                        hook = (
+                            "    async def async_check_value(self):\n        self.check_value()\n"
+                        )
+                    if method in ("setUp", "tearDown", "asyncSetUp", "asyncTearDown", "mixed"):
+                        name = "tearDown" if method == "mixed" else method
+                        async_hook = "async " if name.startswith("async") else ""
+                        hook = f"    {async_hook}def {name}(self):\n        self.check_value()\n"
+                    assertion = (
+                        "raise RuntimeError('not an assertion')"
+                        if method == "runtime"
+                        else "self.assertEqual(1, 2)"
+                    )
+                    source = textwrap.dedent(f"""
+                        import unittest
+                        class Example(unittest.{base}):
+                            {prefix}def test_value(self):
+                                {body}
+                            def check_value(self):
+                                for value in (1, 2):
+                                    with self.subTest(value=value):
+                                        with self.subTest('nested'):
+                                            {assertion}
+                    """) + hook
+                    content = self.assert_report(
+                        "unittest", reporter + source, method == "test_value"
+                    )
+                    record = json.loads(content.split(b"DV-RUNNER-PHASES ")[1])
+                    expected = [method == "test_value"] * 2
+                    if method == "mixed":
+                        expected = [True, True, False, False]
+                    self.assertEqual(record["body_assertions"], expected)
+
+    def test_unittest_subtests_and_helper_assertions(self):
+        self.unittest_subtest_cases()
+
+    def test_unittest_deferred_subtests_python310(self):
+        # Python 3.10 reports subtests after the body and lifecycle frames have returned.
+        self.unittest_subtest_cases(deferred=True)
+
+    def test_unittest_subtest_entered_in_body_but_failed_in_cleanup(self):
+        self.assert_report(
+            "unittest",
             """
-            self.assert_report("unittest", source, expected)
+            import sys
+            import unittest
+            class Example(unittest.TestCase):
+                def test_value(self):
+                    self.context = self.subTest(value=1)
+                    self.context.__enter__()
+                    self.addCleanup(self.check_value)
+                def check_value(self):
+                    try:
+                        self.assertEqual(1, 2)
+                    except AssertionError:
+                        self.context.__exit__(*sys.exc_info())
+            """,
+            False,
+        )
+
+    def test_unittest_python310_subtest_report_format(self):
+        content = textwrap.dedent('''\
+            ======================================================================
+            FAIL: test_value (test_value.Example) (value=1)
+            ----------------------------------------------------------------------
+            Traceback (most recent call last):
+              File "test_value.py", line 10, in test_value
+                self.check_value()
+              File "test_value.py", line 7, in check_value
+                self.assertEqual(1, 2)
+            AssertionError: 1 != 2
+
+            ----------------------------------------------------------------------
+            Ran 1 test in 0.001s
+
+            FAILED (failures=1)
+
+            DV-RUNNER-PHASES {"runner": "unittest", "body_assertions": [true]}
+        ''').encode()
+        phase = {"status": "normal", "exit_code": 1}
+        self.assertTrue(red_assertion(phase, content, "unittest")[0])
+        for invalid in (
+            content.replace(b"[true]", b"[false]"),
+            content.replace(b"AssertionError", b"RuntimeError"),
+            content.replace(b"in check_value", b"in setUp"),
+            content.replace(b"failures=1", b"failures=1, errors=1"),
+        ):
+            self.assertFalse(red_assertion(phase, invalid, "unittest")[0])
 
     @unittest.skipUnless(HAS_PYTEST, "pytest is optional runner test tooling")
     def test_pytest_fixture_phases_and_mixed_failures(self):
