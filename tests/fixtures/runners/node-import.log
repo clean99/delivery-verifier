@@ -1,0 +1,43 @@
+TAP version 13
+# node:internal/modules/cjs/loader:1210
+#   throw err;
+#   ^
+# Error: Cannot find module 'nonexistent_regression_dependency'
+# Require stack:
+# - <fixture>/value.test.cjs
+#     at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+#     at Module._load (node:internal/modules/cjs/loader:1038:27)
+#     at Module.require (node:internal/modules/cjs/loader:1289:19)
+#     at require (node:internal/modules/helpers:182:18)
+#     at Object.<anonymous> (<fixture>/value.test.cjs:3:1)
+#     at Module._compile (node:internal/modules/cjs/loader:1521:14)
+#     at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+#     at Module.load (node:internal/modules/cjs/loader:1266:32)
+#     at Module._load (node:internal/modules/cjs/loader:1091:12)
+#     at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12) {
+#   code: 'MODULE_NOT_FOUND',
+#   requireStack: [
+#     '<fixture>/value.test.cjs'
+#   ]
+# }
+# Node.js v20.20.2
+# Subtest: <fixture>/value.test.cjs
+not ok 1 - <fixture>/value.test.cjs
+  ---
+  duration_ms: 28.6795
+  location: '<fixture>/value.test.cjs:1:1'
+  failureType: 'testCodeFailure'
+  exitCode: 1
+  signal: ~
+  error: 'test failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 30.955333

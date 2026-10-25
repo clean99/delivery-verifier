@@ -1,0 +1,20 @@
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+__________________________________ test_value __________________________________
+
+    def test_value():
+>       raise RuntimeError('before assertion')
+E       RuntimeError: before assertion
+
+test_value.py:2: RuntimeError
+__________________________________ test_other __________________________________
+
+    def test_other():
+>       assert 1 == 2
+E       assert 1 == 2
+
+test_value.py:4: AssertionError
+=========================== short test summary info ============================
+FAILED test_value.py::test_value - RuntimeError: before assertion
+FAILED test_value.py::test_other - assert 1 == 2
+2 failed in 0.01s

@@ -1,0 +1,12 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+__________________________________ test_value __________________________________
+
+    def test_value():
+>       assert 1 == 2
+E       assert 1 == 2
+
+test_value.py:2: AssertionError
+=========================== short test summary info ============================
+FAILED test_value.py::test_value - assert 1 == 2
+1 failed in 0.01s

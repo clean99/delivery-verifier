@@ -1,0 +1,12 @@
+E                                                                        [100%]
+==================================== ERRORS ====================================
+_________________________ ERROR at setup of test_value _________________________
+
+    def setup_function():
+>       raise RuntimeError('setup failed')
+E       RuntimeError: setup failed
+
+test_value.py:2: RuntimeError
+=========================== short test summary info ============================
+ERROR test_value.py::test_value - RuntimeError: setup failed
+1 error in 0.01s

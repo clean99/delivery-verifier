@@ -1,0 +1,33 @@
+TAP version 13
+# <fixture>/value.test.cjs:3
+# const broken syntax;
+#       ^^^^^^
+# SyntaxError: Missing initializer in const declaration
+#     at wrapSafe (node:internal/modules/cjs/loader:1464:18)
+#     at Module._compile (node:internal/modules/cjs/loader:1495:20)
+#     at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+#     at Module.load (node:internal/modules/cjs/loader:1266:32)
+#     at Module._load (node:internal/modules/cjs/loader:1091:12)
+#     at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
+#     at node:internal/main/run_main_module:28:49
+# Node.js v20.20.2
+# Subtest: <fixture>/value.test.cjs
+not ok 1 - <fixture>/value.test.cjs
+  ---
+  duration_ms: 30.565083
+  location: '<fixture>/value.test.cjs:1:1'
+  failureType: 'testCodeFailure'
+  exitCode: 1
+  signal: ~
+  error: 'test failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 36.330334
