@@ -1,5 +1,6 @@
 include README.md README.zh-CN.md CONTRIBUTING.md SECURITY.md CHANGELOG.md LICENSE
 include docs/design.md
+include build_backend.py
 include examples/demo/run.py
 include tests/*.py
 recursive-include tests/fixtures *.log *.json

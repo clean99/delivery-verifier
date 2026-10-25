@@ -21,10 +21,18 @@ For an installed CLI, `pipx install .` or `uv tool install .` installs this sour
 ```sh
 python -m venv .venv
 . .venv/bin/activate
-python -m pip install -e . ruff==0.17.1
+python -m pip install -e . ruff==0.17.1 pytest==8.4.2 setuptools==80.9.0
 ```
 
 Installation can download build/development dependencies. In an offline environment, use already installed tools or a local wheel cache; the source-level test and demo commands do not need a package install. If Ruff is unavailable offline, run `python -m compileall -q src tests examples` and report it as syntax validation, not as a completed Ruff check. CI runs Ruff and tests on Python 3.10–3.13.
+
+Pytest and setuptools are development-only dependencies for real-runner and archive regression tests. Node 20 runs the TAP regression fixtures. Tests skip these optional integrations when their tooling is absent; CI installs all of it. The stdlib-only tests and demo remain usable offline.
+
+## Reproducible builds
+
+From a clean checkout, run `uv build` (or another PEP 517 frontend). The in-tree `build_backend.py` delegates to setuptools, then rewrites the sdist with sorted members, normalized modes, `uid=gid=0` and `uname=gname=root`. It removes builder-specific PAX metadata and timestamps. The gzip header has no filename. Both the gzip header and tar members use `SOURCE_DATE_EPOCH`; the backend sets it to `946684800` (2000-01-01 UTC) if absent, also making it available to wheel builds. Set the same epoch for every build of a release, and keep Python, setuptools and compression tooling versions fixed when comparing archive bytes.
+
+`tests/test_build_artifacts.py` builds the sdist twice with different source mtimes, checks every member's owner and timestamps, and compares the resulting bytes. Before release, also install the built wheel and sdist into separate clean virtual environments, run `dv --version`, and run the bundled demo and tests from `share/delivery-verifier`. The backend itself ships in both distributions so the sdist and bundled source resources can be rebuilt. These commands build and install locally; they do not publish artifacts.
 
 ## Changes and tests
 

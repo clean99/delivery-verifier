@@ -1,6 +1,7 @@
 [build-system]
 requires = ["setuptools>=68"]
-build-backend = "setuptools.build_meta"
+build-backend = "build_backend"
+backend-path = ["."]
 
 [project]
 name = "delivery-verifier"
@@ -21,7 +22,7 @@ where = ["src"]
 dv = ["_vendor/NOTICE", "_vendor/tomllib/LICENSE"]
 
 [tool.setuptools.data-files]
-"share/delivery-verifier" = ["README.md", "README.zh-CN.md", "CONTRIBUTING.md", "SECURITY.md", "CHANGELOG.md", "LICENSE", "pyproject.toml", "MANIFEST.in"]
+"share/delivery-verifier" = ["README.md", "README.zh-CN.md", "CONTRIBUTING.md", "SECURITY.md", "CHANGELOG.md", "LICENSE", "pyproject.toml", "MANIFEST.in", "build_backend.py"]
 "share/delivery-verifier/docs" = ["docs/design.md"]
 "share/delivery-verifier/examples/demo" = ["examples/demo/run.py"]
 "share/delivery-verifier/tests" = ["tests/*.py"]

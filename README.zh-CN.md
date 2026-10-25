@@ -66,6 +66,8 @@ dv --help
 
 源码分发包包含示例、完整测试和引用文档。Wheel 将这些资源按源码目录结构安装到 `<environment>/share/delivery-verifier`。在可写环境中进入该目录，使用环境自身的 Python 执行 `python examples/demo/run.py` 或 `PYTHONPATH=src python -m unittest discover -s tests -v`。这些资源作为本地示例保留，避免占用顶层测试包名。
 
+使用 `uv build` 构建分发包。构建后端将 sdist 所有者统一为 `0/root`，归档时间取 `SOURCE_DATE_EPOCH`，默认值为 UTC 2000-01-01。发布检查见[可复现构建](CONTRIBUTING.md#reproducible-builds)。
+
 ## 验证层级：逐项保留证据
 
 | 层级 | 证据 | 检查方式 |

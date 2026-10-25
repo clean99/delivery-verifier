@@ -14,6 +14,7 @@
 
 ### Fixed
 
+- Normalize sdist owner fields and archive metadata, and set a stable `SOURCE_DATE_EPOCH` for reproducible local release builds.
 - Bind all evidence to a location-independent digest of checker sources; reject missing or stale checker bindings, including after upgrades.
 - Require assertion-only red output from unittest, pytest, or Node TAP; reject import, runtime, collection, and fixture errors even when green passes. Revalidate saved red logs at the gate. Other reporters fail closed.
 - Include complete tests, fixtures, demo, and referenced documentation in source distributions and wheel resources.
