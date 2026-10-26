@@ -19,7 +19,9 @@ def machine_path_patterns() -> list[str]:
                 ("private", "var"), ("private", "tmp")]
     patterns = ["/" + "/".join(parts) + "/" for parts in prefixes]
     patterns.append("C:" + chr(92) + "Users")
-    patterns.append(str(Path(tempfile.gettempdir()).resolve()).rstrip("/\\") + os.sep)
+    temporary = str(Path(tempfile.gettempdir()).resolve()).rstrip("/\\")
+    if temporary not in ("/tmp", "/var/tmp"):
+        patterns.append(temporary + os.sep)
     return patterns + [pattern.replace(chr(92), chr(92) * 2) for pattern in patterns]
 
 
