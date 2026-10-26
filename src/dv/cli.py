@@ -52,6 +52,40 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"dv {__version__}")
     commands = parser.add_subparsers(dest="command", required=True)
 
+    prove = commands.add_parser(
+        "prove",
+        help="prove one regression against committed snapshots",
+        allow_abbrev=False,
+        description=(
+            "Not a security sandbox. Run unittest, pytest, or Node TAP against "
+            "committed base/head snapshots. Dirty local files are excluded and left untouched. "
+            "No dependency installs, implicit shell, or complete "
+            "suite coverage guarantee. Jest/Vitest and native Windows are unsupported."
+        ),
+    )
+    prove.add_argument(
+        "--test", required=True, metavar="COMMAND", help="POSIX-split argv; no shell"
+    )
+    prove.add_argument("--base", default="main", metavar="REF", help="local base (uses merge base)")
+    prove.add_argument("--head", default="HEAD", metavar="REF", help="local committed head")
+    prove.add_argument(
+        "--test-file",
+        action="append",
+        default=[],
+        metavar="PATH",
+        help="additional pure test file retained from head",
+    )
+    prove.add_argument("--timeout", type=_positive_int, default=1800, metavar="SECONDS")
+    prove.add_argument("--hygiene", action="store_true", help="also check committed diff hygiene")
+    prove.add_argument(
+        "--require-review",
+        type=Path,
+        metavar="ITEM",
+        help="require an existing matching independent review",
+    )
+    prove.add_argument("--json", action="store_true", help="emit one JSON object; logs stay local")
+    prove.set_defaults(operation="prove")
+
     init = commands.add_parser("init", help="create a local work item", allow_abbrev=False)
     init.add_argument("item", nargs="?", type=Path, default=Path(".dv/item.json"), metavar="ITEM")
     init.add_argument("--implementer", required=True, metavar="MODEL")
@@ -121,9 +155,19 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def execute(args: argparse.Namespace) -> dict:
-    from dv import evidence, gate, hooks, hygiene, redgreen
+    from dv import evidence, gate, hooks, hygiene, prove, redgreen
     from dv.item import Item, initialize
 
+    if args.operation == "prove":
+        return prove.run(
+            args.test,
+            args.base,
+            args.head,
+            explicit=args.test_file,
+            timeout=args.timeout,
+            check_hygiene=args.hygiene,
+            review=args.require_review,
+        )
     if args.operation == "init":
         return initialize(args.item, args.implementer, args.base, args.kind)
     if args.operation == "hooks install":
@@ -158,6 +202,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             print(f"{args.operation}: {'PASS' if output['ok'] else 'FAIL'}")
             print(f"HEAD {output.get('head_sha', '')} base {output.get('base_sha', '')}")
+            if args.operation == "prove":
+                print(output.get("scope_note", "Committed snapshots only; not a security sandbox."))
+                print(f"Evidence: {output.get('evidence_dir', '')}")
+                for name, outcome in output.get("optional_checks", {}).items():
+                    print(f"{name}: {outcome}")
             for check in output.get("checks", []):
                 print(f"[{check['outcome'].upper()}] {check['check']}: {check['detail']}")
                 if check.get("fix"):

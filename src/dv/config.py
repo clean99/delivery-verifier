@@ -82,15 +82,24 @@ def validate(config: dict) -> dict:
 
 
 def load(root: Path) -> dict:
-    config = copy.deepcopy(DEFAULTS)
-    for filename, tables in (("pyproject.toml", ("tool", "dv")), (".dv.toml", ("dv",))):
+    sources = {}
+    for filename in ("pyproject.toml", ".dv.toml"):
         path = root / filename
         if not path.exists():
             continue
         if not path.resolve().is_relative_to(root):
             raise DVError(f"Configuration escapes repository: {filename}")
+        sources[filename] = path.read_bytes()
+    return from_sources(sources)
+
+
+def from_sources(sources: dict[str, bytes]) -> dict:
+    config = copy.deepcopy(DEFAULTS)
+    for filename, tables in (("pyproject.toml", ("tool", "dv")), (".dv.toml", ("dv",))):
+        if filename not in sources:
+            continue
         try:
-            data = tomllib.loads(path.read_text(encoding="utf-8"))
+            data = tomllib.loads(sources[filename].decode("utf-8"))
         except (ValueError, UnicodeError, RecursionError) as error:
             raise DVError(f"Malformed {filename}: {error}") from error
         for table in tables:

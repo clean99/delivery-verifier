@@ -177,7 +177,6 @@ class FirstUsableProofSpec(unittest.TestCase):
         self.assertEqual(self.state(), before)
         self.assertEqual(list(Path(self.env["TMPDIR"]).iterdir()), [])
 
-    @pending
     def test_A01_one_command_records_real_red_green_without_item(self):
         self.require_prove()
         self.fixture()
@@ -204,7 +203,6 @@ class FirstUsableProofSpec(unittest.TestCase):
         self.assertIn("OK", (logs / "green.log").read_text())
         self.assert_cleaned(before)
 
-    @pending
     def test_A02_hollow_test_does_not_prove_change(self):
         self.require_prove()
         self.fixture(
@@ -217,7 +215,6 @@ class FirstUsableProofSpec(unittest.TestCase):
         self.evidence(output)
         self.assert_cleaned(before)
 
-    @pending
     def test_A03_wrong_reason_failure_is_rejected(self):
         self.require_prove()
         for old in (
@@ -236,7 +233,6 @@ class FirstUsableProofSpec(unittest.TestCase):
                     self.assert_cleaned(before)
                 Path(self.env["TMPDIR"]).rmdir()
 
-    @pending
     def test_A04_green_with_zero_executed_tests_is_rejected(self):
         self.require_prove()
         test = (
@@ -254,7 +250,6 @@ class FirstUsableProofSpec(unittest.TestCase):
         self.assertEqual(output["green"]["tests"]["executed"], 0)
         self.assertIn("green execution", str(output["checks"]))
 
-    @pending
     def test_A05_green_with_only_skipped_tests_is_rejected(self):
         self.require_prove()
         test = TEST.replace(
@@ -267,7 +262,6 @@ class FirstUsableProofSpec(unittest.TestCase):
         self.assertEqual(output["green"]["tests"]["executed"], 0)
         self.assertEqual(output["green"]["tests"]["skipped"], 1)
 
-    @pending
     def test_A06_both_phases_are_detached_and_leave_dirty_checkout_untouched(self):
         self.require_prove()
         self.fixture()
@@ -298,7 +292,6 @@ class FirstUsableProofSpec(unittest.TestCase):
         self.assertNotEqual(executions[0]["cache"], executions[1]["cache"])
         self.assert_cleaned(before)
 
-    @pending
     def test_A07_explicit_head_and_merge_base_do_not_use_callers_head(self):
         self.require_prove()
         self.fixture()
@@ -311,7 +304,6 @@ class FirstUsableProofSpec(unittest.TestCase):
         self.assertEqual(output["base_sha"], self.base)
         self.assert_cleaned(before)
 
-    @pending
     def test_A08_test_command_is_not_shell_code(self):
         self.require_prove()
         self.fixture()
@@ -324,7 +316,6 @@ class FirstUsableProofSpec(unittest.TestCase):
             proc = self.invoke("prove", "--test", value, "--json")
             self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)
 
-    @pending
     def test_A09_timeout_cleans_only_owned_worktrees(self):
         self.require_prove()
         test = TEST.replace(
@@ -341,7 +332,6 @@ class FirstUsableProofSpec(unittest.TestCase):
         self.evidence(output)
         self.assert_cleaned(before)
 
-    @pending
     def test_A10_missing_executable_is_operational_not_red(self):
         self.require_prove()
         self.fixture()
@@ -351,7 +341,6 @@ class FirstUsableProofSpec(unittest.TestCase):
         self.assertEqual(output["red"]["status"], "launch_error")
         self.assert_cleaned(before)
 
-    @pending
     def test_A11_sigterm_invalidates_attempt_and_cleans_up(self):
         self.require_prove()
         marker = self.directory / "started"
@@ -390,7 +379,6 @@ class FirstUsableProofSpec(unittest.TestCase):
         self.assertTrue(records, "interrupted attempt must remain inspectable")
         self.assertTrue(all(not json.loads(path.read_text())["ok"] for path in records))
 
-    @pending
     def test_A12_hygiene_is_opt_in_and_never_runs_full_suite(self):
         self.require_prove()
         self.fixture()
@@ -408,7 +396,6 @@ class FirstUsableProofSpec(unittest.TestCase):
         self.assertEqual(checked["green"]["exit_code"], 0)
         self.assertNotIn("launch_error", str(checked))
 
-    @pending
     def test_A13_opt_in_review_reuses_binding_and_rejects_stale_report(self):
         self.require_prove()
         box = Sandbox()
@@ -431,7 +418,6 @@ class FirstUsableProofSpec(unittest.TestCase):
         self.assertEqual(rejected["optional_checks"]["review"], "fail")
         self.assertIn("stale", str(rejected["checks"]).lower())
 
-    @pending
     def test_A14_new_attempt_never_reuses_old_success_or_overwrites_item(self):
         self.require_prove()
         self.fixture()
@@ -450,7 +436,6 @@ class FirstUsableProofSpec(unittest.TestCase):
         self.evidence(good)
         self.evidence(bad)
 
-    @pending
     def test_A15_help_states_scope_and_reporter_limits(self):
         self.require_prove()
         text = self.invoke("prove", "--help").stdout.lower()
@@ -463,7 +448,6 @@ class FirstUsableProofSpec(unittest.TestCase):
             output = self.prove(command=command, expected=2)
             self.assertEqual(output["error"]["code"], "unsupported_runner")
 
-    @pending
     def test_A16_explicit_test_file_retains_custom_test_without_retaining_fix(self):
         self.require_prove()
         self.fixture()
@@ -486,7 +470,6 @@ class FirstUsableProofSpec(unittest.TestCase):
         rejected = self.prove("--test-file", "value.py", command=command, expected=2)
         self.assertEqual(rejected["error"]["code"], "mixed_test_file")
 
-    @pending
     def test_A17_existing_pytest_reporter_works_through_prove(self):
         self.require_prove()
         if importlib.util.find_spec("pytest") is None:
@@ -507,7 +490,6 @@ class FirstUsableProofSpec(unittest.TestCase):
         self.assertEqual(output["runner"], "pytest")
         self.assertEqual(output["green"]["tests"]["passed"], 1)
 
-    @pending
     def test_A18_existing_node_tap_reporter_works_through_prove(self):
         self.require_prove()
         node = shutil.which("node")

@@ -10,6 +10,9 @@ import unittest
 from contextlib import contextmanager
 
 PREFIX = "DV-RUNNER-PHASES "
+_BODY_CODES = {
+    cls._callTestMethod.__code__ for cls in (unittest.TestCase, unittest.IsolatedAsyncioTestCase)
+}
 
 
 def unittest_body(error: tuple, test: unittest.TestCase, *, subtest: bool = False) -> bool:
@@ -24,7 +27,7 @@ def unittest_body(error: tuple, test: unittest.TestCase, *, subtest: bool = Fals
             frames.append(frame)
             frame = frame.f_back
     classes = (unittest.TestCase, unittest.IsolatedAsyncioTestCase)
-    body = {cls._callTestMethod.__code__ for cls in classes}
+    body = _BODY_CODES
     lifecycle = {
         getattr(cls, method).__code__
         for cls in classes
@@ -34,8 +37,16 @@ def unittest_body(error: tuple, test: unittest.TestCase, *, subtest: bool = Fals
     return bool(body.intersection(relevant)) and not lifecycle.intersection(relevant)
 
 
-def emit(runner: str, failures: list[bool]) -> None:
-    print("\n" + PREFIX + json.dumps({"runner": runner, "body_assertions": failures}), flush=True)
+def emit(runner: str, failures: list[bool], execution: dict) -> None:
+    record = {"runner": runner, "body_assertions": failures, **execution}
+    print("\n" + PREFIX + json.dumps(record), flush=True)
+
+
+def empty_execution() -> dict:
+    return {
+        "complete": False,
+        "tests": {"executed": 0, "passed": 0, "failed": 0, "skipped": 0},
+    }
 
 
 def run_unittest() -> None:
@@ -43,6 +54,47 @@ def run_unittest() -> None:
     original_failure = unittest.TestResult.addFailure
     original_subtest = unittest.TestResult.addSubTest
     original_context = unittest.TestCase.subTest
+    original_run = unittest.TextTestRunner.run
+    original_success = unittest.TestResult.addSuccess
+    bodies, successes = {}, set()
+    execution = empty_execution()
+    runs = 0
+
+    def body_wrapper(method):
+        def call(test, *args, **kwargs):
+            bodies[id(test)] = test
+            return method(test, *args, **kwargs)
+
+        return call
+
+    for cls in (unittest.TestCase, unittest.IsolatedAsyncioTestCase):
+        # Keep the original frames on the stack for assertion-phase classification.
+        cls._callTestMethod = body_wrapper(cls._callTestMethod)
+
+    def add_success(result, test):
+        successes.add(id(test))
+        return original_success(result, test)
+
+    def run(runner, test):
+        nonlocal runs
+        runs += 1
+        result = original_run(runner, test)
+        failed = {id(getattr(t, "test_case", t)) for t, _ in result.failures + result.errors}
+        failed.update(id(t) for t in result.unexpectedSuccesses)
+        skipped = len(result.skipped) + len(result.expectedFailures)
+        execution.update(
+            complete=runs == 1,
+            tests={
+                "executed": max(0, result.testsRun - skipped),
+                "passed": len((successes & bodies.keys()) - failed),
+                "failed": len(failed),
+                "skipped": skipped,
+            },
+        )
+        return result
+
+    unittest.TestResult.addSuccess = add_success
+    unittest.TextTestRunner.run = run
 
     @contextmanager
     def subtest_context(test, *args, **kwargs):
@@ -62,8 +114,7 @@ def run_unittest() -> None:
     def add_subtest(result, test, subtest, error):
         if error is not None:
             failures.append(
-                issubclass(error[0], AssertionError)
-                and getattr(subtest, "_dv_test_body", False)
+                issubclass(error[0], AssertionError) and getattr(subtest, "_dv_test_body", False)
             )
         return original_subtest(result, test, subtest, error)
 
@@ -73,16 +124,21 @@ def run_unittest() -> None:
     try:
         runpy.run_module("unittest", run_name="__main__", alter_sys=True)
     finally:
-        emit("unittest", failures)
+        emit("unittest", failures, execution)
 
 
 _pytest_failures: list[bool] = []
 _pytest_calls: dict[tuple[str, str], bool] = {}
+_pytest_reports: dict[str, dict] = {}
+_pytest_duplicate = False
 
 
 def pytest_sessionstart(session):
+    global _pytest_duplicate
     _pytest_failures.clear()
     _pytest_calls.clear()
+    _pytest_reports.clear()
+    _pytest_duplicate = False
 
 
 def pytest_runtest_makereport(item, call):
@@ -94,13 +150,36 @@ def pytest_runtest_makereport(item, call):
 
 
 def pytest_runtest_logreport(report):
+    global _pytest_duplicate
     valid = _pytest_calls.pop((report.nodeid, report.when), False)
     if report.failed:
         _pytest_failures.append(valid)
+    phases = _pytest_reports.setdefault(report.nodeid, {})
+    _pytest_duplicate |= report.when in phases
+    phases[report.when] = (report.outcome, hasattr(report, "wasxfail"))
 
 
 def pytest_sessionfinish(session, exitstatus):
-    emit("pytest", _pytest_failures)
+    execution = empty_execution()
+    counts = execution["tests"]
+    complete = not _pytest_duplicate and int(exitstatus) in (0, 1)
+    for phases in _pytest_reports.values():
+        complete &= "setup" in phases and "teardown" in phases
+        values = list(phases.values())
+        failed = any(outcome == "failed" for outcome, _ in values)
+        skipped = any(outcome == "skipped" or xfail for outcome, xfail in values)
+        passed = (
+            not failed
+            and not skipped
+            and phases.get("call") == ("passed", False)
+            and phases.get("teardown") == ("passed", False)
+        )
+        counts["failed"] += int(failed)
+        counts["skipped"] += int(skipped and not failed)
+        counts["passed"] += int(passed)
+        counts["executed"] += int("call" in phases and not skipped)
+    execution["complete"] = bool(complete)
+    emit("pytest", _pytest_failures, execution)
 
 
 if __name__ == "__main__":
