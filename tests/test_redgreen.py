@@ -145,7 +145,7 @@ class RedGreenTests(unittest.TestCase):
     def test_interrupt_restores_and_preserves_index(self):
         box = self.box()
         index = box.item.repo.index()
-        with patch("dv.redgreen.process.run", side_effect=KeyboardInterrupt):
+        with patch("dv.runners.process.run", side_effect=KeyboardInterrupt):
             with self.assertRaises(KeyboardInterrupt):
                 redgreen.run(box.item)
         self.assert_restored(box, index)

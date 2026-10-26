@@ -1,0 +1,19 @@
+
+[1m[46m RUN [49m[22m [36mv3.2.4 [39m[90m/sample/cases/global-teardown-error[39m
+
+
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Unhandled Error [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+[31m[1mError[22m: dv: Vitest globalSetup/teardown is unsupported[39m
+[90m [2m❯[22m DeliveryReporter.onInit <tmp>/node_modules/dv-probe/_vitest_reporter.mjs:[2m202:13[22m[39m
+[90m [2m❯[22m ../npm-6.4.5/node_modules/vitest/dist/chunks/cli-api.BkDphVBG.js:[2m9948:56[22m[39m
+[90m [2m❯[22m Vitest.report ../npm-6.4.5/node_modules/vitest/dist/chunks/cli-api.BkDphVBG.js:[2m9948:36[22m[39m
+[90m [2m❯[22m Vitest.start ../npm-6.4.5/node_modules/vitest/dist/chunks/cli-api.BkDphVBG.js:[2m9534:15[22m[39m
+[90m [2m❯[22m startVitest ../npm-6.4.5/node_modules/vitest/dist/chunks/cli-api.BkDphVBG.js:[2m10510:8[22m[39m
+[90m [2m❯[22m start ../npm-6.4.5/node_modules/vitest/dist/chunks/cac.Cb-PYCCB.js:[2m1412:15[22m[39m
+[90m [2m❯[22m CAC.run ../npm-6.4.5/node_modules/vitest/dist/chunks/cac.Cb-PYCCB.js:[2m1391:2[22m[39m
+
+
+
+
+
+DV-VITEST-REPORT {"schema_version": 7, "runner": "vitest", "version": "3.2.4", "nonce": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "complete": false, "error": "Vitest globalSetup/teardown is unsupported", "exitCode": 1, "shutdownComplete": true, "lateErrors": [], "lateStderr": []}

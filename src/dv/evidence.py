@@ -18,7 +18,7 @@ from dv.common import (
 )
 from dv.item import Item
 from dv.redgreen import phase_ok, plan
-from dv.runners import instrument, red_assertion, runner_for
+from dv.runners import instrument, legacy_runner, red_assertion
 
 
 def model_of(name: str) -> str:
@@ -132,6 +132,11 @@ def review_checks(item: Item) -> list[dict]:
 
 
 def redgreen_checks(item: Item) -> list[dict]:
+    try:
+        if item.meta.get("test_command"):
+            legacy_runner(item.meta["test_command"], item.meta["test_runner"])
+    except DVError as error:
+        return [row("V2 red/green", "fail", str(error))]
     if item.file("restoration.json").exists():
         return [row("V2 red/green", "fail", "Restoration plan remains; inspect it before retrying")]
     try:
@@ -159,7 +164,7 @@ def redgreen_checks(item: Item) -> list[dict]:
         timeout = record.get("timeout_seconds")
         if type(timeout) is not int or timeout <= 0:
             raise ValueError("Malformed proof timeout")
-        runner = runner_for(item.meta["test_command"], item.meta["test_runner"])
+        runner = legacy_runner(item.meta["test_command"], item.meta["test_runner"])
         if record.get("runner") != runner:
             raise ValueError("Focused test runner changed or is missing")
         for name in ("red", "green"):
@@ -169,7 +174,7 @@ def redgreen_checks(item: Item) -> list[dict]:
                     f"{name} is not a normal {'failing' if name == 'red' else 'passing'} command"
                 )
             if (
-                phase.get("argv") != instrument(item.meta["test_command"], {})
+                phase.get("argv") != instrument(item.meta["test_command"], {}, runner)
                 or phase.get("timeout_seconds") != timeout
             ):
                 raise ValueError("Phase recipe does not match recorded proof")

@@ -6,11 +6,15 @@ import json
 import re
 
 from dv.runners import ANSI
+from dv.vitest import parse_report
 
 
 def receipt(content: bytes, runner: str) -> tuple[dict, bool]:
     counts = {"executed": 0, "passed": 0, "failed": 0, "skipped": 0}
     text = ANSI.sub("", content.decode("utf-8", errors="replace"))
+    if runner == "vitest":
+        counts, complete, _, _ = parse_report(text)
+        return counts, complete
     if runner == "node-test":
         return tap_receipt(text)
     records = re.findall(r"^DV-RUNNER-PHASES (.+)$", text, re.M)
@@ -118,6 +122,9 @@ def green_execution(phase: dict, content: bytes, runner: str) -> tuple[bool, str
         and counts["passed"] > 0
         and counts["failed"] == 0
     )
+    if runner == "vitest" and not valid:
+        _, _, _, detail = parse_report(content.decode("utf-8", errors="replace"))
+        return False, detail + "; requires exit 0 and at least one passed test body, with no errors"
     return valid, (
         f"{runner}: complete={complete}, tests={counts}; "
         "requires a normal exit 0 and at least one passed test body, with no errors"

@@ -12,10 +12,10 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
-from dv import hygiene, process
+from dv import hygiene
 from dv.common import DVError, atomic_bytes, digest, result, row, write_json
 from dv.item import Item
-from dv.runners import instrument, red_assertion, runner_for
+from dv.runners import instrument, legacy_runner, red_assertion, run_test
 
 
 def pure_explicit_test(file: hygiene.DiffFile) -> bool:
@@ -155,14 +155,16 @@ def path_state(path: Path) -> dict:
 def run_phase(item: Item, phase: str, command: list[str], cwd: Path, timeout: int) -> dict:
     with tempfile.TemporaryDirectory(prefix=f".{phase}-cache-", dir=item.path.parent) as cache:
         env = {**os.environ, "PYTHONPYCACHEPREFIX": cache, "PYTHONDONTWRITEBYTECODE": "1"}
-        return process.run(
-            instrument(command, env), cwd, item.file(f"redgreen-{phase}.log"), timeout, env=env
+        return run_test(
+            command, cwd, item.file(f"redgreen-{phase}.log"), timeout, env, item.meta["test_runner"]
         )
 
 
 def run(item: Item, timeout: int | None = None) -> dict:
     if os.name != "posix":
         raise DVError("Red/green restoration requires POSIX", 3, "unsupported_platform")
+    if item.meta.get("test_command"):
+        runner = legacy_runner(item.meta["test_command"], item.meta["test_runner"])
     with item.repo.lock(), interrupted_signals():
         item.ensure_current()
         if "test_command" not in item.meta:
@@ -176,6 +178,7 @@ def run(item: Item, timeout: int | None = None) -> dict:
                 state="running",
             ),
         )
+        instrument(item.meta["test_command"], {}, item.meta["test_runner"])
         reverted, retained = plan(item)
         for path in reverted:
             if not item.repo.entry(item.head, path) and os.path.lexists(item.root / path):
@@ -281,7 +284,6 @@ def run(item: Item, timeout: int | None = None) -> dict:
         green = None
         if not checks and red["status"] not in ("timeout", "launch_error", "signal"):
             green = run_phase(item, "green", command, cwd, timeout)
-        runner = runner_for(command, item.meta["test_runner"])
         asserted, detail = red_assertion(red, item.file("redgreen-red.log").read_bytes(), runner)
         checks.append(row("red assertion", "pass" if asserted else "fail", detail))
         checks.append(

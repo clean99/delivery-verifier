@@ -436,7 +436,7 @@ class FirstUsableProofSpec(unittest.TestCase):
         for option in ("--base", "--head", "--hygiene", "--require-review", "--test-file"):
             self.assertIn(option, text)
         self.fixture()
-        for command in (["jest"], ["vitest", "run"]):
+        for command in (["jest"], ["npm", "test"]):
             output = self.prove(command=command, expected=2)
             self.assertEqual(output["error"]["code"], "unsupported_runner")
 

@@ -28,6 +28,19 @@ Installation can download build/development dependencies. In an offline environm
 
 Pytest and setuptools are development-only dependencies for real-runner and archive regression tests. Node 20 runs the TAP regression fixtures. Tests skip these optional integrations when their tooling is absent; CI installs all of it. The stdlib-only tests and demo remain usable offline.
 
+Vitest parser tests use checked-in real-runner fixtures. Live Vitest tests are optional and make no network calls: set `DV_VITEST` to an already installed Vitest 3.2.x executable (or put `vitest` on PATH). They exercise lifecycle errors, `dv prove` in temporary Git repositories, and saved-evidence gate validation. For local preparation, check `df -h ~` and leave at least 5 GiB free, then install only in a disposable directory:
+
+```sh
+sample=$(mktemp -d)
+HUSKY=0 LEFTHOOK=0 npm install --prefix "$sample" --registry=https://registry.npmjs.org \
+  --ignore-scripts --no-audit --no-fund vitest@3.2.4
+DV_VITEST="$sample/node_modules/.bin/vitest" PYTHONPATH=src \
+  python -m unittest discover -s tests -v
+rm -rf "$sample"
+```
+
+The test suite never installs Vitest itself. `tests/fixtures/runners/vitest-provenance.json` records the fixture sources, exact runner command, versions and normalization. `examples/vitest/run.py --vitest "$DV_VITEST"` replays accepted assertion red and rejected import-error red; `--output DIR` retains both proofs and logs.
+
 ## Reproducible builds
 
 From a clean checkout, run `uv build` (or another PEP 517 frontend). The in-tree `build_backend.py` delegates to setuptools, then rewrites the sdist with sorted members, normalized modes, `uid=gid=0` and `uname=gname=root`. It removes builder-specific PAX metadata and timestamps. The gzip header has no filename. Both the gzip header and tar members use `SOURCE_DATE_EPOCH`; the backend sets it to `946684800` (2000-01-01 UTC) if absent, also making it available to wheel builds. Set the same epoch for every build of a release, and keep Python, setuptools and compression tooling versions fixed when comparing archive bytes.

@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.2.0 — 2026-10-27
+
+### Added
+
+- `dv prove` supports Vitest 3.2.x, tested with Vite 6.3.5, 6.4.5 and 7.3.7. Direct `vitest`, `npx vitest`, `pnpm vitest` and `pnpm exec vitest` commands are detected. Jest remains unsupported, and the legacy `dv redgreen` path rejects Vitest with `dv prove` guidance.
+- Red qualifies only when tests fail on test-body assertions, classified from the live error (Chai, `node:assert`, snapshot mismatch). Hook, cleanup-callback, setup, import, suite, unhandled and late shutdown errors fail closed; retries, repeats and `test.fails` are rejected.
+- Inline and external snapshots, read-only in both phases. Each test's consumed snapshot entries (file, key, expected content) must match between red and green, and snapshot-bearing tests need unique full names.
+- Harness identity: the inputs Vite and Vitest report (config files and their dependencies, setup and workspace files, env files) and the effective resolved configuration must be identical in both phases, so a change to any of them fails closed. Files read by plugins or other code that Vite does not report count as part of the change under test.
+- Vitest command-line options are an allowlist; others, such as `--diff`, are rejected before any phase runs.
+
+### Changed
+
+- Proof worktrees for every runner run in a temporary directory outside the repository; evidence stays under `.git/dv/proofs`.
+- Node runners get per-phase copy-on-write clones of `node_modules` (APFS clonefile, Linux FICLONE), with a free-space check before falling back to a copy. pytest and unittest commands run as in 0.1.0.
+- Each phase uses its own temporary root, removed after success, failure and timeout.
+- Test-support directories (`tests/`, `__tests__/`, test-utils, fixtures, `__mocks__`) and `conftest.py` are retained from head for every runner.
+
 ## 0.1.0 — 2026-10-26
 
 ### Added

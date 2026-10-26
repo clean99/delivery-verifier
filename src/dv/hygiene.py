@@ -16,8 +16,9 @@ from dv.common import result, row, write_json
 from dv.item import Item
 
 TEST_PATH = re.compile(
-    r"(^|/)(__tests__|__mocks__|tests?|specs?|e2e|fixtures?)/|"
-    r"\.(test|spec|stories)\.[\w]+$|_test\.(go|py)$|(^|/)test_[^/]*\.py$"
+    r"(^|/)(__tests__|__mocks__|tests?|specs?|e2e|fixtures?|test[-_]utils)/|"
+    r"(^|/)conftest\.py$|(^|/)(?!\.env(?:\.|$))[^/]+\.(test|spec|stories)\.[\w]+$|"
+    r"_test\.(go|py)$|(^|/)test_[^/]*\.py$"
 )
 DOC_PATH = re.compile(r"\.(md|mdx|rst|txt)$|(^|/)(docs?|\.changeset)/")
 SNAPSHOT = re.compile(r"(^|/)__snapshots__/|\.snap$")

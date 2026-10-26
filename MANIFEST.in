@@ -6,9 +6,10 @@ recursive-include examples/handbook *.py
 include docs/assets/demo.gif
 include build_backend.py
 include examples/demo/run.py
+include examples/vitest/run.py
 include tests/*.py
 recursive-include tests/fixtures *.log *.json
-recursive-include src/dv *.py LICENSE NOTICE
+recursive-include src/dv *.py *.mjs LICENSE NOTICE
 include .github/workflows/*.yml
 prune artifacts
 prune .dv

@@ -9,14 +9,28 @@ import uuid
 from pathlib import Path
 from types import SimpleNamespace
 
-from dv import config, evidence, hygiene, process
+from dv import config, evidence, hygiene
 from dv.checker import checker_digest
 from dv.common import DVError, canonical, digest, nonblank, result, row, write_json
 from dv.execution import green_execution, receipt
 from dv.item import Item
 from dv.redgreen import interrupted_signals
-from dv.runners import instrument, red_assertion, runner_for
-from dv.snapshots import LocalRepo, Snapshots, content, file_state, retained_inputs, tree
+from dv.runners import instrument, red_assertion, run_test, runner_for
+from dv.snapshots import (
+    LocalRepo,
+    Snapshots,
+    content,
+    file_state,
+    retained_inputs,
+    tree,
+)
+from dv.vitest import (
+    harness_inputs,
+    harness_parity,
+    snapshot_inputs,
+    snapshot_oracles,
+    snapshot_parity,
+)
 
 
 def review_input(path, repo, head, base, policy, command, runner, explicit, timeout):
@@ -64,11 +78,13 @@ def run(
     runner = runner_for(command)
     if runner == "unsupported":
         raise DVError(
-            "Use direct unittest, pytest, or node --test with TAP; "
-            "Jest/Vitest and wrapper discovery are unsupported",
+            "Use direct unittest, pytest, node --test with TAP, or Vitest; "
+            "Jest and arbitrary wrapper discovery are unsupported",
             2,
             "unsupported_runner",
         )
+    if runner == "vitest":
+        instrument(command, {})
     repo = LocalRepo(Path.cwd())
     head, tip = repo.resolve(head_ref), repo.resolve(base_ref)
     bases = repo.text("merge-base", "--all", head, tip).splitlines()
@@ -145,8 +161,13 @@ def run(
             }
             output["context_sha256"] = digest(canonical(bound))
             write_json(directory / "proof.json", output)
+            oracles, harnesses = {}, {}
             for phase, ref, entries in (("red", base, red_tree), ("green", head, head_tree)):
                 worktree, cache = snapshots.create(phase, ref, entries)
+                phase_command = command
+                if runner in ("node-test", "vitest"):
+                    snapshots.copy_dependencies(worktree.root, entries)
+                    phase_command = snapshots.command(command, worktree.root)
                 env = {
                     key: value for key, value in os.environ.items() if not key.startswith("GIT_")
                 }
@@ -155,13 +176,23 @@ def run(
                 index = worktree.git_path("index").read_bytes()
                 log = directory / f"{phase}.log"
                 try:
-                    executed = process.run(
-                        instrument(command, env), worktree.root, log, timeout, env=env
-                    )
+                    executed = run_test(phase_command, worktree.root, log, timeout, env)
                     executed["tests"], executed["report_complete"] = receipt(
                         log.read_bytes(), runner
                     )
                     output[phase] = executed
+                    if runner == "vitest":
+                        valid, inputs, detail = harness_inputs(
+                            log.read_bytes(), worktree.root, repo, entries)
+                        checks.append(row(f"{phase} harness inputs", "pass" if valid else "fail",
+                                          detail))
+                        if valid:
+                            harnesses[phase] = inputs
+                        valid, detail = snapshot_inputs(log.read_bytes(), worktree.root, repo, head)
+                        checks.append(row(f"{phase} snapshot inputs", "pass" if valid else "fail",
+                                          detail))
+                        if valid:
+                            oracles[phase] = snapshot_oracles(log.read_bytes(), worktree.root)
                 finally:
                     after = file_state(worktree.root, entries)
                     changed = before != after or index != worktree.git_path("index").read_bytes()
@@ -184,6 +215,16 @@ def run(
                         )
                 if executed["status"] != "normal":
                     break
+            if runner == "vitest":
+                identical, detail = harness_parity(harnesses["red"], harnesses["green"]) if (
+                    "red" in harnesses and "green" in harnesses
+                ) else (False, "Harness input validation must pass in both phases")
+                checks.append(row("harness identity", "pass" if identical else "fail", detail))
+                identical, detail = snapshot_parity(oracles["red"], oracles["green"]) if (
+                    "red" in oracles and "green" in oracles
+                ) else (False, "Snapshot input validation must pass in both phases")
+                checks.append(row("snapshot oracle parity", "pass" if identical else "fail",
+                                  detail))
             red = output["red"]
             valid, detail = red_assertion(red, (directory / "red.log").read_bytes(), runner)
             checks.append(row("red assertion", "pass" if valid else "fail", detail))

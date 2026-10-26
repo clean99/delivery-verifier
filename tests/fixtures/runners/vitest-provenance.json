@@ -1,0 +1,261 @@
+{
+  "captured": "2026-10-27",
+  "vitest": "3.2.4",
+  "node": "v20.20.2",
+  "install": [
+    "npm",
+    "install",
+    "--prefix",
+    "<sample>",
+    "--registry=https://registry.npmjs.org",
+    "--ignore-scripts",
+    "--no-audit",
+    "--no-fund",
+    "vitest@3.2.4",
+    "vite@6.4.5"
+  ],
+  "environment": {
+    "HUSKY": "0",
+    "LEFTHOOK": "0",
+    "CI": "true"
+  },
+  "command": [
+    "<sample>/node_modules/.bin/vitest",
+    "run",
+    "--maxWorkers=1",
+    "--run",
+    "--watch=false",
+    "--coverage.enabled=false",
+    "--update=false",
+    "--reporter=default",
+    "--reporter=<probe>/node_modules/dv-probe/_vitest_reporter.mjs"
+  ],
+  "cwd": "<sample>/cases/<case>",
+  "capture": "dv.runners.run_test stages probes in an external temporary Node dependency directory. Schema 7 records resolved harness inputs plus snapshot paths, raw-byte hashes and ordered entries.",
+  "normalization": "Synthetic project paths and nonce identifiers; absolute and relative probe stack paths are replaced by <tmp>/node_modules/dv-probe via tests.test_vitest_runner.normalize_vitest_fixture. Every fixture is scanned for machine prefixes.",
+  "cases": {
+    "assertion": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\ntest('value', () => expect(1).toBe(2));\n",
+      "exit_code": 1
+    },
+    "pass": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\ntest('value', () => expect(2).toBe(2));\n",
+      "exit_code": 0
+    },
+    "import": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\nimport 'nonexistent_regression_dependency'; test('value', () => expect(1).toBe(2));\n",
+      "exit_code": 1
+    },
+    "hook": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\nbeforeEach(() => { throw new Error('setup failed'); }); test('value', () => expect(1).toBe(2));\n",
+      "exit_code": 1
+    },
+    "after-each": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\nafterEach(() => expect(1).toBe(2)); test('value', () => expect(2).toBe(2));\n",
+      "exit_code": 1
+    },
+    "before-all": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\nbeforeAll(() => expect(1).toBe(2)); test('value', () => expect(1).toBe(2));\n",
+      "exit_code": 1
+    },
+    "after-all": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\nafterAll(() => expect(1).toBe(2)); test('value', () => expect(1).toBe(2));\n",
+      "exit_code": 1
+    },
+    "cleanup": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\nbeforeEach(() => () => expect(1).toBe(2)); test('value', () => expect(2).toBe(2));\n",
+      "exit_code": 1
+    },
+    "callback": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\ntest('value', () => { onTestFinished(() => expect(1).toBe(2)); expect(2).toBe(2); });\n",
+      "exit_code": 1
+    },
+    "soft-hook": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\nbeforeEach(() => expect.soft(1).toBe(2)); test('value', () => expect(2).toBe(2));\n",
+      "exit_code": 1
+    },
+    "with-hooks": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\nbeforeEach(() => expect(2).toBe(2)); afterEach(() => expect(2).toBe(2)); test('value', () => expect(1).toBe(2));\n",
+      "exit_code": 1
+    },
+    "soft": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\ntest('value', () => { expect.soft(1).toBe(2); expect.soft(3).toBe(4); });\n",
+      "exit_code": 1
+    },
+    "skipped": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\ntest.skip('value', () => expect(1).toBe(2));\n",
+      "exit_code": 0
+    },
+    "todo": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\ntest.todo('value');\n",
+      "exit_code": 0
+    },
+    "zero": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\nexport const value = 1;\n",
+      "exit_code": 1
+    },
+    "runtime": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\ntest('value', () => { throw new Error('broken'); });\n",
+      "exit_code": 1
+    },
+    "mixed": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\ntest('runtime', () => { throw new Error('broken'); }); test('assertion', () => expect(1).toBe(2));\n",
+      "exit_code": 1
+    },
+    "timeout": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\ntest('value', async () => { await new Promise(() => {}); }, 10);\n",
+      "exit_code": 1
+    },
+    "unhandled": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\ntest('value', async () => { Promise.reject(new Error('unhandled')); await new Promise(resolve => setTimeout(resolve, 20)); expect(2).toBe(2); });\n",
+      "exit_code": 1
+    },
+    "expected-failure": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\ntest.fails('value', () => expect(1).toBe(2));\n",
+      "exit_code": 0
+    },
+    "retry": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\ntest('value', {retry: 1}, () => expect(1).toBe(2));\n",
+      "exit_code": 1
+    },
+    "chai": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\nimport {assert} from 'vitest'; test('value', () => assert.equal(1, 2));\n",
+      "exit_code": 1
+    },
+    "collection": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\ntest('value', () => { invalid syntax });\n",
+      "exit_code": 1
+    },
+    "suite": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\nimport {describe} from 'vitest'; describe('suite', () => { expect(1).toBe(2); });\n",
+      "exit_code": 1
+    },
+    "fixtures": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\nconst extended = test.extend({value: async ({}, use) => { expect(1).toBe(2); await use(2); }}); extended('value', ({value}) => expect(value).toBe(2));\n",
+      "exit_code": 1
+    },
+    "failed-callback": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\ntest('value', ({onTestFailed}) => { onTestFailed(() => expect(3).toBe(4)); expect(1).toBe(2); });\n",
+      "exit_code": 1
+    },
+    "coverage-disabled": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\ntest('value', () => expect(2).toBe(2));\n",
+      "exit_code": 0,
+      "config_files": {
+        "vitest.config.mjs": "export default {test: {coverage: {enabled: true}}};"
+      }
+    },
+    "global-setup-error": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\ntest('value', () => expect(1).toBe(2));\n",
+      "exit_code": 1,
+      "config_files": {
+        "setup.mjs": "export default () => { throw new Error('setup failed'); };",
+        "vitest.config.mjs": "export default {test: {globalSetup: ['./setup.mjs']}};"
+      }
+    },
+    "global-setup-ok": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\ntest('value', () => expect(1).toBe(2));\n",
+      "exit_code": 1,
+      "config_files": {
+        "setup.mjs": "export default () => {};",
+        "vitest.config.mjs": "export default {test: {globalSetup: ['./setup.mjs']}};"
+      }
+    },
+    "global-teardown-error": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\ntest('value', () => expect(1).toBe(2));\n",
+      "exit_code": 1,
+      "config_files": {
+        "setup.mjs": "export default () => () => { throw new Error('teardown failed'); };",
+        "vitest.config.mjs": "export default {test: {globalSetup: ['./setup.mjs']}};"
+      }
+    },
+    "projects": {
+      "source": "",
+      "exit_code": 1,
+      "config_files": {
+        "one/value.test.js": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\ntest('value', () => expect(1).toBe(2));\n",
+        "two/value.test.js": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\ntest('value', () => expect(1).toBe(2));\n",
+        "vitest.config.mjs": "export default {test: {projects: [{test: {name: 'one', pool: 'forks', include: ['one/*.test.js']}}, {test: {name: 'two', pool: 'threads', include: ['two/*.test.js']}}]}};\n"
+      }
+    },
+    "root-global-teardown": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\ntest('value', () => expect(1).toBe(2));\n",
+      "exit_code": 1,
+      "config_files": {
+        "vitest.config.mjs": "export default {test: {globalSetup: ['./setup.mjs'], projects: [{test: {name: 'one', include: ['value.test.js']}}]}};",
+        "setup.mjs": "export default () => () => { throw new Error('root teardown failed'); };"
+      }
+    },
+    "late-rejection": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\ntest('value', () => expect(1).toBe(2));\n",
+      "exit_code": 1,
+      "config_files": {
+        "vitest.config.mjs": "export default {plugins: [{name: 'late', closeBundle() { setTimeout(() => Promise.reject(new Error('late rejection')), 0); }}]};"
+      }
+    },
+    "late-close-error": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\ntest('value', () => expect(1).toBe(2));\n",
+      "exit_code": 1,
+      "config_files": {
+        "vitest.config.mjs": "export default {plugins: [{name: 'late', closeBundle() { throw new Error('close failed'); }}]};"
+      }
+    },
+    "late-exit-error": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\ntest('value', () => expect(1).toBe(2));\n",
+      "exit_code": 1,
+      "config_files": {
+        "vitest.config.mjs": "export default {plugins: [{name: 'late', closeBundle() { process.on('exit', () => { throw new Error('late exit'); }); }}]};"
+      }
+    },
+    "renamed-runtime": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\ntest('value', () => { throw Object.assign(new TypeError('runtime configuration failed'), {name: 'AssertionError'}); });\n",
+      "exit_code": 1
+    },
+    "plain-assertion": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\ntest('value', () => { throw {name: 'AssertionError', message: 'broken'}; });\n",
+      "exit_code": 1
+    },
+    "node-assertion": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\nimport assert from 'node:assert'; test('value', () => assert.equal(1, 2));\n",
+      "exit_code": 1
+    },
+    "snapshot-inline": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\ntest('value', () => expect(1).toMatchInlineSnapshot('2'));\n",
+      "exit_code": 1
+    },
+    "snapshot-external": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\ntest('value', () => expect(1).toMatchSnapshot());\n",
+      "exit_code": 1,
+      "config_files": {
+        "__snapshots__/value.test.js.snap": "// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html\n\nexports[`value 1`] = `2`;\n"
+      }
+    },
+    "filter-watch": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\ntest('watch', () => expect(1).toBe(2)); test('dev', () => expect(1).toBe(2));\n",
+      "exit_code": 1,
+      "arguments": [
+        "-t",
+        "watch"
+      ]
+    },
+    "filter-dev": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\ntest('watch', () => expect(1).toBe(2)); test('dev', () => expect(1).toBe(2));\n",
+      "exit_code": 1,
+      "arguments": [
+        "--testNamePattern",
+        "dev"
+      ]
+    },
+    "snapshot-runtime": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\nexpect.addSnapshotSerializer({test: () => true, serialize: () => { throw Object.assign(new Error('Snapshot mismatched'), {actual: 1, expected: 2}); }}); test('value', () => expect(1).toMatchInlineSnapshot('2'));\n",
+      "exit_code": 1
+    },
+    "concurrent-soft": {
+      "source": "import {test,expect,beforeAll,afterAll,beforeEach,afterEach,onTestFinished} from 'vitest';\nfor (const name of ['one', 'two']) test.concurrent(name, async ({expect}) => { await Promise.resolve(); expect.soft(1).toBe(2); });\n",
+      "exit_code": 1
+    }
+  },
+  "global_setup_guard": "The root configuration and every resolved project reject globalSetup. Root-with-projects and late rejection/close/exit fixtures exercise the guard and exit-time receipt invalidation.",
+  "vite": "6.4.5",
+  "chai": "5.3.3"
+}

@@ -11,7 +11,8 @@ def checker_digest(package: Path | None = None) -> str:
     root = package if package is not None else Path(__file__).resolve().parent
     sources = {
         path.relative_to(root).as_posix(): digest(path.read_bytes())
-        for path in sorted(root.rglob("*.py"))
+        for path in sorted(root.rglob("*"))
+        if path.suffix in (".py", ".mjs")
     }
     if "__init__.py" not in sources or "checker.py" not in sources:
         raise DVError("Checker source files are missing; reinstall delivery-verifier", 3)

@@ -23,4 +23,4 @@ Use the repository's private **Report a vulnerability** option if it is enabled.
 
 A useful report includes the affected version, Python/Git/OS versions, a minimal synthetic reproduction, expected and observed behavior, and the potential impact. Remove credentials, personal data, and private paths from evidence. Do not test against someone else's repository or services.
 
-During 0.1.0 development, fixes target the current development branch. There are no maintenance or response-time guarantees. A successful gate is evidence to inspect, not a security certification.
+For the 0.2.x line, fixes target the current development branch. There are no maintenance or response-time guarantees. A successful gate is evidence to inspect, not a security certification.

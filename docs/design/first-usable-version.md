@@ -1,6 +1,6 @@
 # First usable version
 
-Release version: `0.1.0`. The initial implementation was `cf4dbf82bc90dd96919435b0cf8f6cf529b81213` (`0.1.0.dev0`); the frozen baseline is `aeec479965619bb5325cbccfcd7e94fb1e962ce8`. Acceptance IDs A01–A21 remain executable in `tests/test_first_usable_spec.py` and `tests/test_first_usable_delivery_spec.py`; their assertions are unchanged and expected-failure markers have been removed. The installation section specifies v0.1.0 release paths and acceptance checks. The development execution record below preserves the earlier partial run and its disk-space constraint.
+Release version: `0.2.0`. The initial implementation was `cf4dbf82bc90dd96919435b0cf8f6cf529b81213` (`0.1.0.dev0`); the frozen baseline is `aeec479965619bb5325cbccfcd7e94fb1e962ce8`. Acceptance IDs A01–A21 remain executable in `tests/test_first_usable_spec.py` and `tests/test_first_usable_delivery_spec.py`; their assertions are unchanged and expected-failure markers have been removed. The installation section specifies v0.2.0 release paths and acceptance checks. The development execution record below preserves the earlier partial run and its disk-space constraint.
 
 ## Decision
 
@@ -58,14 +58,14 @@ Keep the standard-library runtime, Python 3.10–3.13 and Linux/macOS with Git 2
 
 Build wheel and sdist from the release commit. A21 installs each into separate clean environments through `pip` and `pipx`, also exercises a Git VCS install, runs `dv --version` and a real proof from a cwd outside the source checkout with `PYTHONPATH` removed, and checks bundled resources. Development prerequisites are explicit: setuptools 80.9.0, pipx 1.7.1, pytest 8.4.2 and Ruff 0.17.1. Run the acceptance and existing suite on all four Python minor versions; missing runner prerequisites or skipped install checks do not satisfy release acceptance.
 
-Version-pinned v0.1.0 install paths:
+Version-pinned v0.2.0 install paths:
 
 ```sh
-pipx install https://github.com/clean99/delivery-verifier/releases/download/v0.1.0/delivery_verifier-0.1.0-py3-none-any.whl
-uv tool install https://github.com/clean99/delivery-verifier/releases/download/v0.1.0/delivery_verifier-0.1.0-py3-none-any.whl
+pipx install https://github.com/clean99/delivery-verifier/releases/download/v0.2.0/delivery_verifier-0.2.0-py3-none-any.whl
+uv tool install https://github.com/clean99/delivery-verifier/releases/download/v0.2.0/delivery_verifier-0.2.0-py3-none-any.whl
 # Inside an activated Python virtual environment:
-python -m pip install https://github.com/clean99/delivery-verifier/releases/download/v0.1.0/delivery_verifier-0.1.0.tar.gz
-pipx install "delivery-verifier @ git+https://github.com/clean99/delivery-verifier.git@v0.1.0"
+python -m pip install https://github.com/clean99/delivery-verifier/releases/download/v0.2.0/delivery_verifier-0.2.0.tar.gz
+pipx install "delivery-verifier @ git+https://github.com/clean99/delivery-verifier.git@v0.2.0"
 ```
 
 Local acceptance uses file artifacts and `git+file`. After publication, a release rehearsal sets `DV_SPEC_WHEEL_URL`, `DV_SPEC_SDIST_URL` and `DV_SPEC_SOURCE_URL` to the version-pinned public URLs and repeats A21 read-only. Record results as passed/attempted cases with exact commit and tool versions. Verify downloaded assets against the release checksums; Git tags can be moved. Artifact preparation and validation are separate from publishing and tagging. These install paths use GitHub, not PyPI.

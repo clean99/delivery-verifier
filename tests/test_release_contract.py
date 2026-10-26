@@ -156,7 +156,8 @@ class ReleaseContractTests(unittest.TestCase):
             (["node", "--test", "--test-reporter=tap"], "node-test"),
             (["python", "-c", "raise RuntimeError()"], "unsupported"),
             (["jest"], "unsupported"),
-            (["vitest", "run"], "unsupported"),
+            (["npx", "jest"], "unsupported"),
+            (["vitest", "run"], "vitest"),
         ]
         for command, expected in cases:
             self.assertEqual(runner_for(command), expected)

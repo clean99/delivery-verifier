@@ -5,9 +5,16 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
+import tempfile
+import uuid
 from pathlib import Path
 
-RUNNERS = {"auto", "unittest", "pytest", "node-test"}
+from dv import process
+from dv.common import DVError, digest
+from dv.vitest import PREFIX, parse_report
+
+RUNNERS = {"auto", "unittest", "pytest", "node-test", "vitest"}
 ANSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 
 
@@ -24,11 +31,113 @@ def runner_for(command: list[str], declared: str = "auto") -> str:
         return "pytest"
     if executable in ("node", "nodejs") and "--test" in command:
         return "node-test"
+    if vitest_index(command) is not None:
+        return "vitest"
     return "unsupported"
 
 
-def instrument(command: list[str], env: dict[str, str]) -> list[str]:
-    runner = runner_for(command)
+def legacy_runner(command: list[str], declared: str = "auto") -> str:
+    runner = runner_for(command, declared)
+    if runner == "vitest":
+        raise DVError("Vitest is supported only by dv prove; use dv prove --test 'vitest run ...'",
+                      2, "unsupported_runner")
+    return runner
+
+
+def vitest_index(command: list[str]) -> int | None:
+    executable = Path(command[0]).name
+    if executable == "vitest":
+        return 0
+    if executable in ("npx", "pnpm"):
+        index = 2 if command[1:2] == ["exec"] and executable == "pnpm" else 1
+        if command[index:index + 1] == ["vitest"]:
+            return index
+    return None
+
+
+VITEST_PATH_OPTIONS = {"-c", "--config", "-r", "--root", "--dir"}
+VITEST_VALUE_OPTIONS = VITEST_PATH_OPTIONS | {
+    "-t", "--testNamePattern", "--project", "--maxWorkers", "--minWorkers",
+}
+VITEST_FLAGS = {"--run", "--globals"}
+
+
+def validate_vitest_args(args: list[str]) -> None:
+    first_positional = True
+    index = 0
+    while index < len(args):
+        arg = args[index]
+        option, separator, value = arg.partition("=")
+        if arg.startswith("-"):
+            if option in VITEST_VALUE_OPTIONS:
+                if not separator:
+                    index += 1
+                    value = args[index] if index < len(args) else ""
+                if not value or value.startswith("-"):
+                    raise DVError(f"Vitest option {option} requires a value")
+            elif arg not in VITEST_FLAGS:
+                raise DVError(f"Unsupported Vitest option {option}; use only the documented "
+                              "proof argument allowlist", 2, "unsupported_runner_option")
+        else:
+            if first_positional and arg in ("watch", "dev", "bench", "list", "init", "related"):
+                raise DVError(f"Unsupported Vitest command {arg}; use vitest run [filters]")
+            first_positional = False
+        index += 1
+
+
+def command_path_indices(command: list[str]) -> set[int]:
+    paths = {0}
+    index = vitest_index(command)
+    if index is not None:
+        index += 1
+        path_options = VITEST_PATH_OPTIONS
+        value_options = VITEST_VALUE_OPTIONS
+    elif runner_for(command) == "node-test":
+        index = 1
+        path_options = {"-r", "--require", "--import"}
+        value_options = path_options | {
+            "--test-name-pattern", "--test-skip-pattern", "--test-reporter",
+            "--test-reporter-destination", "--test-concurrency", "--test-timeout",
+            "--test-shard", "--conditions", "-C", "--input-type", "--inspect-port",
+        }
+    else:
+        return paths
+    first_positional = True
+    while index < len(command):
+        argument = command[index]
+        option = argument.split("=", 1)[0]
+        if argument.startswith("-"):
+            if option in path_options:
+                paths.add(index if "=" in argument else index + 1)
+            if option in value_options and "=" not in argument:
+                index += 1
+        else:
+            if not (first_positional and argument == "run" and vitest_index(command) is not None):
+                paths.add(index)
+            first_positional = False
+        index += 1
+    return paths
+
+
+def instrument(command: list[str], env: dict[str, str], declared: str = "auto", *,
+               reporter: Path | None = None) -> list[str]:
+    runner = "vitest" if declared == "vitest" else runner_for(command)
+    if runner == "vitest":
+        index = vitest_index(command)
+        if index is None:
+            raise DVError(
+                "Vitest requires a direct vitest, npx vitest or pnpm [exec] vitest command"
+            )
+        validate_vitest_args(command[index + 1:])
+        env["CI"] = "true"
+        env.pop("UPDATE_SNAPSHOT", None)
+        reporter = reporter or Path(__file__).with_name("_vitest_reporter.mjs")
+        prefix = command
+        if Path(command[0]).name == "npx":
+            prefix = [command[0], "--no-install", *command[1:]]
+        run_flag = [] if "--run" in command[index + 1:] else ["--run"]
+        return [*prefix, *run_flag, "--watch=false", "--coverage.enabled=false", "--update=false",
+                "--reporter=default", f"--reporter={reporter}"]
     if runner == "unittest":
         index = command.index("-m")
         return [
@@ -42,6 +151,48 @@ def instrument(command: list[str], env: dict[str, str]) -> list[str]:
         index = 1 if Path(command[0]).name in ("pytest", "py.test") else command.index("-m") + 2
         return [*command[:index], "-p", "dv._runner_probe", *command[index:]]
     return command
+
+
+def run_test(
+    command: list[str], cwd: Path, log: Path, timeout: int, env: dict[str, str],
+    declared: str = "auto",
+) -> dict:
+    argv = instrument(command, env, declared)
+    if runner_for(command, declared) != "vitest":
+        return process.run(argv, cwd, log, timeout, env=env)
+    log.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".vitest-report-", dir=log.parent) as directory, \
+            tempfile.TemporaryDirectory(prefix="dv-vitest-probe-") as probe_directory:
+        report = Path(directory) / "report.json"
+        probe = Path(probe_directory).resolve() / "node_modules" / "dv-probe"
+        if probe.is_relative_to(cwd.resolve()):
+            raise DVError("Vitest probe temporary directory must be outside the execution checkout")
+        probe.mkdir(parents=True)
+        for name in ("_vitest_reporter.mjs", "_vitest_runner.mjs"):
+            shutil.copyfile(Path(__file__).with_name(name), probe / name)
+        reporter = probe / "_vitest_reporter.mjs"
+        argv = instrument(command, env, declared, reporter=reporter)
+        nonce = uuid.uuid4().hex
+        temporary = str(Path(probe_directory).resolve())
+        env.update(DV_VITEST_REPORT=str(report), DV_VITEST_NONCE=nonce,
+                   DV_VITEST_ROOT=str(cwd.resolve()), DV_VITEST_TEMP=temporary,
+                   TMPDIR=temporary, TEMP=temporary, TMP=temporary)
+        phase = process.run(argv, cwd, log, timeout, env=env)
+        phase["vitest_reporter"] = str(reporter)
+        try:
+            if report.is_symlink() or not report.is_file():
+                raise ValueError("missing or nonregular report")
+            record = json.loads(report.read_bytes())
+            if not isinstance(record, dict) or record.get("nonce") != nonce:
+                raise ValueError("report nonce mismatch")
+            if record.get("exitCode") != phase["exit_code"]:
+                raise ValueError("report exit status mismatch")
+        except (OSError, ValueError):
+            record = None
+        with log.open("ab") as stream:
+            stream.write(("\n" + PREFIX + json.dumps(record) + "\n").encode())
+        phase["log_sha256"] = digest(log.read_bytes())
+        return phase
 
 
 def body_assertions(text: str, runner: str, failures: int) -> bool:
@@ -146,13 +297,16 @@ def red_assertion(phase: dict, content: bytes, runner: str) -> tuple[bool, str]:
         return False, "Red did not exit normally; no assertion proof"
     if phase["exit_code"] != 1:
         return False, "Red must exit 1 with assertion failures, not pass or abort"
+    if runner == "vitest":
+        _, complete, asserted, detail = parse_report(content.decode("utf-8", errors="replace"))
+        return complete and asserted, detail
     validators = {
         "unittest": unittest_assertions,
         "pytest": pytest_assertions,
         "node-test": node_assertions,
     }
     if runner not in validators:
-        return False, "Unsupported red runner; use unittest, pytest, or node --test with TAP output"
+        return False, "Unsupported red runner; use unittest, pytest, node --test TAP, or Vitest"
     text = ANSI.sub("", content.decode("utf-8", errors="replace"))
     if not validators[runner](text):
         return False, (

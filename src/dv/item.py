@@ -143,7 +143,7 @@ class Item:
         for key, value in m["exceptions"].items():
             nonblank(value, key)
         if not isinstance(m["test_runner"], str) or m["test_runner"] not in RUNNERS:
-            raise DVError("test_runner must be auto, unittest, pytest, or node-test")
+            raise DVError("test_runner must be auto, unittest, pytest, node-test, or vitest")
         if "test_command" in m:
             argv(m["test_command"], "test_command")
         elif not m["exceptions"].get("no_test_reason") and not (

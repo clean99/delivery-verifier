@@ -14,10 +14,10 @@ For people shipping changes written by coding agents. Runs locally with any agen
 
 Requirements: Python 3.10–3.13 with `venv` and `pip`, Git 2.38+, Linux/macOS. Some Linux distributions package `venv` separately (for example, `python3-venv`).
 
-Install the **v0.1.0 GitHub Release wheel** with [pipx](https://pipx.pypa.io/latest/how-to/install-pipx.html):
+Install the **v0.2.0 GitHub Release wheel** with [pipx](https://pipx.pypa.io/latest/how-to/install-pipx.html):
 
 ```sh
-pipx install https://github.com/clean99/delivery-verifier/releases/download/v0.1.0/delivery_verifier-0.1.0-py3-none-any.whl
+pipx install https://github.com/clean99/delivery-verifier/releases/download/v0.2.0/delivery_verifier-0.2.0-py3-none-any.whl
 pipx ensurepath
 ```
 
@@ -43,13 +43,18 @@ Use `--base REF --head REF` to select committed revisions, `--test-file checks/r
 ```sh
 dv prove --test "python -m pytest --tb=long tests/test_words.py"
 dv prove --test "node --test --test-reporter=tap tests/words.test.cjs"
+dv prove --test "vitest run tests/words.test.js"
 ```
+
+**Vitest scope:** a PASS does not establish that a product module was fixed. Files read by plugins but not reported by Vite count as part of the change under test; see the [runner contract](#focused-runner-contract).
 
 Hygiene and review are opt-in: add `--hygiene` or `--require-review .dv/item.json`. The latter consumes an existing matching review from the item workflow below. Default proof does not run configured full-suite checks or approve delivery; the legacy `gate` and hooks retain their own requirements.
 
-**Committed snapshots only.** Staged, unstaged, untracked and ignored caller files are excluded and left untouched. Policy comes from committed head. Test subprocesses discard inherited `GIT_*` overrides so ordinary Git commands discover the execution worktree rather than the caller's repository or index. Each attempt records `proof.json`, `red.log` and `green.log` under the Git administrative `dv/proofs/` directory and removes its execution worktrees and caches. The CLI prints the exact evidence directory. Failure and interruption never reuse a previous PASS; a leftover recovery record needs targeted inspection, not a global worktree prune.
+**Committed snapshots only.** Caller source comes only from committed snapshots; staged, unstaged, untracked and ignored source changes are excluded and left untouched. Node TAP and Vitest proofs copy installed Node dependencies into each execution tree; Python proofs leave unrelated Node dependencies alone. Policy comes from committed head. Test subprocesses discard inherited `GIT_*` overrides so ordinary Git commands discover the execution worktree rather than the caller's repository or index. Execution worktrees live outside the caller checkout and its `.git` directory. Each attempt records `proof.json`, `red.log` and `green.log` under the Git administrative `dv/proofs/` directory and removes its execution worktrees and caches. The CLI prints the exact evidence directory. Failure and interruption never reuse a previous PASS; a leftover recovery record needs targeted inspection, not a global worktree prune.
 
-**Current limits:** unittest, pytest and Node TAP are supported; Jest/Vitest, native Windows, submodule/LFS hydration, and automatic dependency installation are outside this version. Commands are POSIX-split argv, with no implicit shell expansion or pipelines. Prepare dependencies yourself; editable installs pointing to another checkout can defeat source isolation. Worktrees are **not a security sandbox**: commands retain your filesystem/network privileges. Logs remain local and can contain secrets. A passed proof establishes neither complete test coverage nor assertion correctness; reviewer identities are self-reported. See [the reproducible handbook](docs/handbook/green-tests.md), [implementation and validation status](docs/design/first-usable-version.md), and [security limits](SECURITY.md).
+**Current limits:** unittest, pytest, Node TAP and Vitest 3.2.x are supported; Jest, native Windows, submodule/LFS hydration, and automatic dependency installation are outside this version. Vitest requires the stock runner with a forks/threads pool. Browser mode, custom runners/pools, global setup/teardown and extended test fixtures are excluded. Commands are POSIX-split argv, with no implicit shell expansion or pipelines. Prepare dependencies yourself; editable installs pointing to another checkout can defeat source isolation. Worktrees are **not a security sandbox**: commands retain your filesystem/network privileges. Logs remain local and can contain secrets. A passed proof establishes neither complete test coverage nor assertion correctness; reviewer identities are self-reported. See [the reproducible handbook](docs/handbook/green-tests.md), [implementation and validation status](docs/design/first-usable-version.md), and [security limits](SECURITY.md).
+
+Dependency copies use APFS clones or Linux reflinks where supported; fallback copies check free space first and can be slower on large dependency trees.
 
 For an offline source-only example, run `python3 examples/demo/run.py` from this checkout. It demonstrates the separate item-based delivery gate with synthetic review evidence.
 
@@ -96,7 +101,7 @@ The gate reruns your configured repository checks, flags issues such as focused 
 After [installing uv](https://docs.astral.sh/uv/getting-started/installation/), install the same release wheel:
 
 ```sh
-uv tool install https://github.com/clean99/delivery-verifier/releases/download/v0.1.0/delivery_verifier-0.1.0-py3-none-any.whl
+uv tool install https://github.com/clean99/delivery-verifier/releases/download/v0.2.0/delivery_verifier-0.2.0-py3-none-any.whl
 uv tool update-shell
 ```
 
@@ -109,7 +114,7 @@ This option needs neither pipx nor uv:
 ```sh
 python3 -m venv .venv
 . .venv/bin/activate
-python -m pip install https://github.com/clean99/delivery-verifier/releases/download/v0.1.0/delivery_verifier-0.1.0-py3-none-any.whl
+python -m pip install https://github.com/clean99/delivery-verifier/releases/download/v0.2.0/delivery_verifier-0.2.0-py3-none-any.whl
 dv --version
 dv prove --help
 ```
@@ -118,13 +123,13 @@ Keep this environment activated when changing into your project; activation puts
 
 ### Git tag
 
-Use the pinned v0.1.0 source tag instead of a moving branch:
+Use the pinned v0.2.0 source tag instead of a moving branch:
 
 ```sh
-pipx install "delivery-verifier @ git+https://github.com/clean99/delivery-verifier.git@v0.1.0"
+pipx install "delivery-verifier @ git+https://github.com/clean99/delivery-verifier.git@v0.2.0"
 ```
 
-The release also includes the source archive [`delivery_verifier-0.1.0.tar.gz`](https://github.com/clean99/delivery-verifier/releases/download/v0.1.0/delivery_verifier-0.1.0.tar.gz). Source installs need setuptools >=68 at build time, normally downloaded by the installer. Offline source installation needs locally available build tooling. The wheel needs no source build. Once installed, `dv` uses Python's standard library and your local Git executable.
+The release also includes the source archive [`delivery_verifier-0.2.0.tar.gz`](https://github.com/clean99/delivery-verifier/releases/download/v0.2.0/delivery_verifier-0.2.0.tar.gz). Source installs need setuptools >=68 at build time, normally downloaded by the installer. Offline source installation needs locally available build tooling. The wheel needs no source build. Once installed, `dv` uses Python's standard library and your local Git executable.
 
 ### From a local checkout (contributors)
 
@@ -147,7 +152,7 @@ Build artifacts with `uv build`. The build backend normalizes sdist ownership to
 
 `dv gate` checks readiness: V1, V2, and V4, plus supplied V3 attachments. `dv gate --require-approval` also checks V5. Warnings remain visible; a reasoned test waiver is reported as skipped, never as reproduced proof.
 
-A new commit or amendment invalidates prior evidence. Evidence also binds a SHA-256 digest of the installed checker's Python sources, including its version and bundled parser. Updating or editing the checker invalidates red/green proof, review, and approval; records without this binding must be regenerated. Changes to the merge base, item settings, effective configuration, delivery text, or runtime files also require fresh evidence. Changing the review invalidates approval. Cached `gate.json` is never an authorization input.
+A new commit or amendment invalidates prior evidence. Evidence also binds a SHA-256 digest of the installed checker's Python and bundled JavaScript sources, including its version and parser. Updating or editing the checker invalidates red/green proof, review, and approval; records without this binding must be regenerated. Changes to the merge base, item settings, effective configuration, delivery text, or runtime files also require fresh evidence. Changing the review invalidates approval. Cached `gate.json` is never an authorization input.
 
 ## Optional item-based delivery workflow
 
@@ -187,19 +192,51 @@ dv init --implementer model-a --base main
 
 ### Focused runner contract
 
-`test_runner` defaults to `auto`, detecting direct `python -m unittest`, `python -m pytest` / `pytest`, and `node --test` commands. Both phases use the same recipe. For direct Python commands, `dv` adds its bundled phase probe: a unittest launcher or a pytest plugin, using the selected interpreter and installed runner. The probe adds a `DV-RUNNER-PHASES` record to the log without new runtime dependencies. Red must exit 1 and produce a complete assertion-only report:
+`test_runner` defaults to `auto`, detecting direct `python -m unittest`, `python -m pytest` / `pytest`, and `node --test` commands for the item workflow. **Vitest is supported only through `dv prove`**, which detects `vitest`, `npx vitest`, `pnpm vitest` and `pnpm exec vitest`. Item-based `redgreen` and its evidence gate reject Vitest with guidance to use `dv prove`. Both phases use the same recipe. For direct Python commands, `dv` adds its bundled phase probe: a unittest launcher or a pytest plugin, using the selected interpreter and installed runner. The probe adds a `DV-RUNNER-PHASES` record to the log without new runtime dependencies. Red must exit 1 and produce a complete assertion-only report:
 
 | Runner | Required red output |
 | --- | --- |
 | Python unittest | `FAILED (failures=N)` with positive failures, no errors, and `AssertionError` in every failure traceback. The phase probe must establish test-method execution for every failure; `setUp`, `tearDown`, `addCleanup` and `addAsyncCleanup` failures are rejected. |
 | pytest | Default/long traceback report (`--tb=long`), positive failed count, every failure ending in `AssertionError`, and call-phase evidence. Setup/teardown phases, collection errors and unittest lifecycle failures are excluded, even when pytest labels a unittest lifecycle failure `FAILED`. Short/line/hidden traceback modes are unsupported. |
 | Node.js test runner | `node --test --test-reporter=tap`: positive `# fail`, zero cancelled tests, each underlying failure reporting `failureType: 'testCodeFailure'` and `code: 'ERR_ASSERTION'`. Propagated `subtestsFailed` parents require failed children; parent tests count toward `# fail`, while suite containers do not. |
+| Vitest 3.2.x (`prove` only) | Bundled JSON reporter plus test-body probe: positive failed count, matching body/final errors, and live Chai/Node assertion instances or observed Vitest snapshot mismatches. Renamed runtime errors, plain objects, file/suite errors, lifecycle errors, late shutdown failures, retries and expected-failure tests are rejected. |
+
+Vitest runs once even when `run` is omitted; explicit watch mode and reporter/output overrides are rejected. Option values such as `-t watch` and `--testNamePattern dev` remain test filters. `dv` disables coverage and keeps the default human reporter. It checks the root configuration and every project before selecting the bundled subclass of Vitest's stock runner; global setup/teardown remains excluded. The version gate accepts Vitest 3.2.x; validation uses 3.2.4 with Vite 6.3.5, 6.4.5 and 7.3.7. Vite has no separate version gate.
+
+Vitest's CLI allowlist is limited to:
+
+| Purpose | Accepted arguments |
+| --- | --- |
+| Run and globals | `run`, `--run`, `--globals` (bare flags) |
+| Selection | Positional file filters, `-t` / `--testNamePattern`, `--project` |
+| Workers | `--maxWorkers`, `--minWorkers` |
+| Repository paths | `-c` / `--config`, `-r` / `--root`, `--dir` |
+
+Value-taking options accept a separate value or `--option=value`. Other options, including `--diff`, `--workspace`, watch and reporter overrides, are rejected before either phase. Path operands must stay inside the repository and are rebased into the execution copy. Test-name patterns and project names remain strings.
+
+`dv` holds constant the harness inputs Vite/Vitest report: config files, config dependencies, setup files, workspace files and their observed imports, plus `.env`, `.env.local`, `.env.<mode>` and `.env.<mode>.local` under the resolved env directory. Each phase loads its own committed configuration. The receipt records raw-byte hashes and absence for both repository-local and external inputs. Local paths are repository-relative; external labels use a path hash and filename, with home and absolute prefixes replaced by placeholders. PRs that change these phase inputs fail closed, including additions and deletions.
+
+The receipt also hashes a canonical form of each project's effective resolved test configuration and Vite environment, defines and resolver settings. Checkout-local paths are normalized, including paths inside RegExp sources with escaped slashes or metacharacters. Instrumentation reporter/runner paths, caches, API ports and generated API/probe tokens are excluded. Only hashes and differing top-level key names are recorded, never configuration values. Configs whose resolved values depend on time, randomness or changing process state fail closed when those values differ between phases. Unsupported configuration object types fail closed too.
+
+This contract covers the reported inputs and effective resolved configuration. `dv` does not intercept filesystem reads. Files read by plugins or other code that Vite does not report count as part of the change under test. For example, if a plugin reads a changed `offset.dat` through `fs` and uses it to transform a test, PASS says the test detects that file change; it does not establish a product-module fix. A filesystem read that changes the effective resolved configuration still fails the configuration check.
+
+Across all runners, test support under `tests/`, `test/`, `__tests__/`, `test-utils/`, `test_utils/`, `fixtures/` and `__mocks__/`, together with `conftest.py`, is retained from head alongside tests; base-only support files are removed. A helper-only change cannot count as a production difference. Keep test-only helpers, such as `helper.js` exporting an expected value, in these paths. Importing an arbitrary module from a test does not classify it as support: tests also import product code.
+
+Inline and standard external snapshots are supported. `dv` sets `CI=true`, clears `UPDATE_SNAPSHOT`, and forces `--update=false`, and blocks snapshot save/remove operations; missing snapshots and attempted writes fail closed. Obsolete entries that trigger Vitest reserialization must be resolved before proof. Head's `.snap` and `__snapshots__` files are retained alongside tests for the red run. Every snapshot read, including `toMatchFileSnapshot` and custom snapshot paths, must match head's tracked raw bytes and presence. Each test must consult identical repo-relative snapshot paths and hashes in red and green. Its ordered consumed entries must also match by file, entry key and expected-serialization hash. Snapshot-bearing tests require unique full names within each file/project, including their enclosing suites. Duplicate names fail closed, even when a same-named sibling is skipped. Interpolate each case into parameterized names, for example `test.each([0, 1])('value %s', ...)`. Ordered entry binding remains required; consuming a different entry or consuming it in only one phase fails closed, with the test and entry in the diagnostic. Snapshot mismatch classification observes the live matcher result, not error message text. Soft assertions are classified before serialization; changing an error's name to `AssertionError` is insufficient.
+
+The final JSON is written synchronously at process exit and embedded as `DV-VITEST-REPORT` in the hashed log. Successful shutdown, matching process exit status, and the current file/body probe nonces are required. Late exceptions, rejections, shutdown diagnostics and resource-close failures invalidate the report, including errors after the exit listener writes it. Green requires at least one executed and passed test with no failures or runner errors. `prove` validates both Vitest logs before accepting the proof.
+
+Prepare installed dependencies first; `npx` receives `--no-install`. `prove` uses worktrees outside the caller's checkout and `.git`, copies root and package-local `node_modules`, and rebases dependency/workspace links into the execution copy. Copies use extra local disk space but do not write caches through to the caller's dependencies. Tracked files under `node_modules` retain their committed contents while installed dependencies fill the remaining tree. For Node runners, caller-local executables and recognized path operands (such as Vitest file filters and config/root/dir paths) are rebased to the execution copy when unambiguous; otherwise the command is rejected with repo-relative-path guidance. Test-name patterns, project names and other string options stay verbatim, even if they look like paths. Python commands retain their selected interpreter and arguments, including project-local virtualenvs and activated PATH launchers. Global tool installations remain external and may write their own caches. Probes live in an external temporary Node dependency directory, keeping execution Git status clean without changing Git exclusions or Vite filesystem settings. The example uses `--globals` to avoid needing a local Vitest import:
+
+```sh
+python3 examples/vitest/run.py --vitest /path/to/tooling/node_modules/.bin/vitest
+```
 
 Wrapper commands must declare `test_runner`. Python wrappers also need to run the bundled probe (`python -m dv._runner_probe` for unittest, `python -m pytest -p dv._runner_probe` for pytest), with `dv` importable in that interpreter. A declared runner alone supplies no phase evidence. Missing, incomplete or ambiguous phase records fail closed. Static and full-suite commands are not instrumented.
 
 For unittest, `dv` treats execution of the test method (including its helpers and subtests) as the test body, excluding `setUp`/`tearDown`, their async counterparts, and cleanups. For pytest test functions, the boundary is the **call phase**: everything that runs while the test function is being called, including fixtures dynamically requested with `request.getfixturevalue()` and call-phase hooks such as `pytest_runtest_call` in `conftest.py`. An assertion in either of those counts as a test-body failure even when it is outside the function's own statements. Pytest setup/teardown phases and collection errors are excluded; unittest cases run by pytest retain the stricter test-method boundary. Reviewers should read the red logs to check where the assertion came from and whether it proves the intended regression.
 
-Unsupported reporters, including Jest/Vitest, bare scripts, and suppressed tracebacks fail closed. Static and full-suite commands remain unrestricted. The `red assertion` check distinguishes qualifying assertions from import, runtime, collection, or setup/teardown-phase errors, even if green passes. The gate rechecks the saved log against the same contract. Printed output is trusted local evidence, not authenticated proof.
+Unsupported reporters, including Jest, bare scripts, and suppressed tracebacks fail closed. Static and full-suite commands remain unrestricted. The `red assertion` check distinguishes qualifying assertions from import, runtime, collection, or setup/teardown-phase errors, even if green passes. The gate rechecks the saved log against the same contract. Printed output is trusted local evidence, not authenticated proof.
 
 Paths are relative to the repository root. An optional `description_file` points to ignored local delivery text, such as `.dv/description.txt`; `runtime_files` references ignored evidence files. Use a separate ignored directory for each additional item.
 
@@ -288,7 +325,11 @@ allow_commands = []
 
 Internal Git commands disable lazy fetching and all transport protocols. Missing objects fail locally; prepare them yourself before retrying. Partial clones require Git with `--no-lazy-fetch` support, otherwise use a complete local clone.
 
-Configured commands are trusted local programs with your permissions and environment. They can access the network even though `dv` itself does not. Inspect them first. Red/green temporarily replaces changed production files in place and attempts restoration even on failure. It requires POSIX process control; native Windows is not supported for this workflow. Do not concurrently edit the worktree. Paths absent from `HEAD` but present locally, including ignored files and symlinks, block restoration before any source changes. Each attempt invalidates old proof immediately; the gate rejects incomplete attempts and remaining `restoration.json` plans. Red and green use separate fresh Python bytecode-cache locations without deleting user caches. Commands that override Python's cache environment or reuse other build caches need their own clean-build recipe. If interruption leaves `restoration.json`, preserve it and inspect the affected paths before retrying; uncatchable termination can prevent cleanup. See [SECURITY.md](SECURITY.md).
+Configured commands are trusted local programs with your permissions and environment. They can access the network even though `dv` itself does not. Inspect them first.
+
+The legacy `dv redgreen` command temporarily replaces changed production files in place and attempts restoration even on failure. It requires POSIX process control; native Windows is not supported for this workflow. Do not concurrently edit the worktree. Paths absent from `HEAD` but present locally, including ignored files and symlinks, block restoration before any source changes. Each attempt invalidates old proof immediately; the gate rejects incomplete attempts and remaining `restoration.json` plans. Red and green use separate fresh Python bytecode-cache locations without deleting user caches. Commands that override Python's cache environment or reuse other build caches need their own clean-build recipe. If interruption leaves `restoration.json`, preserve it and inspect the affected paths before retrying; uncatchable termination can prevent cleanup.
+
+`dv prove` instead runs in detached worktrees outside the caller checkout and cleans only its owned worktrees and caches. Each Vitest phase redirects `TMPDIR`, `TEMP` and `TMP` into its owned temporary root, including SSR transforms, and removes that root on success, failure or timeout. It does not sweep unrelated temporary directories. See [SECURITY.md](SECURITY.md).
 
 ## Development and license
 
