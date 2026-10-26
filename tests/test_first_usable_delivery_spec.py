@@ -211,8 +211,11 @@ class FirstUsableInstallSpec(unittest.TestCase):
                             executable = home / "bin/dv"
                         else:
                             bins = home / "bin"
+                            spec = target
+                            if kind == "git" and "@ " not in target:
+                                spec = f"delivery-verifier @ {target}"
                             run(
-                                [pipx, "install", "--python", sys.executable, target],
+                                [pipx, "install", "--python", sys.executable, spec],
                                 extra_env={
                                     "PIPX_HOME": str(home / "home"),
                                     "PIPX_BIN_DIR": str(bins),

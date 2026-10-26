@@ -63,7 +63,7 @@ Document immutable install forms once release assets exist:
 ```sh
 pipx install https://github.com/clean99/delivery-verifier/releases/download/<tag>/<wheel>
 python -m pip install https://github.com/clean99/delivery-verifier/releases/download/<tag>/<sdist>
-pipx install 'git+https://github.com/clean99/delivery-verifier.git@<full-commit>'
+pipx install 'delivery-verifier @ git+https://github.com/clean99/delivery-verifier.git@<full-commit>'
 ```
 
 These are templates, not claims of an available release. Local acceptance uses file artifacts and `git+file`; a release rehearsal sets `DV_SPEC_WHEEL_URL`, `DV_SPEC_SDIST_URL` and `DV_SPEC_SOURCE_URL` to the immutable public URLs and repeats A21 read-only. Record results as passed/attempted cases with exact commit and tool versions. Local install success alone does not establish public asset availability. Prepare artifacts only; publishing, tagging and PyPI credentials are separate owner actions.

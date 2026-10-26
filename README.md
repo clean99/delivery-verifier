@@ -86,7 +86,7 @@ The gate reruns your configured repository checks, flags issues such as focused 
 
 ## Install from a local checkout
 
-The virtual-environment recipe above needs no additional installer. If you prefer tool environments, first [install pipx and configure its PATH](https://pipx.pypa.io/stable/installation/) or [install uv](https://docs.astral.sh/uv/getting-started/installation/). Run `pipx ensurepath` or `uv tool update-shell` as appropriate and open a new shell before expecting `dv` on PATH. Then, from the candidate checkout:
+The virtual-environment recipe above needs no additional installer. If you prefer tool environments, first [install pipx and configure its PATH](https://pipx.pypa.io/latest/how-to/install-pipx.html) or [install uv](https://docs.astral.sh/uv/getting-started/installation/). Run `pipx ensurepath` or `uv tool update-shell` as appropriate and open a new shell before expecting `dv` on PATH. Then, from the candidate checkout:
 
 ```sh
 pipx install .

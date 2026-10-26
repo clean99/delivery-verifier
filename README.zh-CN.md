@@ -86,7 +86,7 @@ Meaningful regression proved: red=1, green=0.
 
 ## 安装：使用本地源码
 
-上面的虚拟环境命令只依赖 Python 自带工具。若选择独立工具环境，请先按官方指引[安装 pipx 并配置 PATH](https://pipx.pypa.io/stable/installation/)，或[安装 uv](https://docs.astral.sh/uv/getting-started/installation/)。分别运行 `pipx ensurepath` 或 `uv tool update-shell` 后打开新 shell，让安装后的 `dv` 可从 PATH 找到。然后在候选源码目录执行：
+上面的虚拟环境命令只依赖 Python 自带工具。若选择独立工具环境，请先按官方指引[安装 pipx 并配置 PATH](https://pipx.pypa.io/latest/how-to/install-pipx.html)，或[安装 uv](https://docs.astral.sh/uv/getting-started/installation/)。分别运行 `pipx ensurepath` 或 `uv tool update-shell` 后打开新 shell，让安装后的 `dv` 可从 PATH 找到。然后在候选源码目录执行：
 
 ```sh
 pipx install .
