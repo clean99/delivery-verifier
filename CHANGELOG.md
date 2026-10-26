@@ -20,6 +20,11 @@
 
 ### Fixed
 
+- Clear inherited Git environment overrides in proof subprocesses so ordinary index operations affect only the execution worktree.
+- Exclude Node TAP file-only successes from green test-body counts; top-level absolute-path test names remain ambiguous and are conservatively excluded.
+- Resolve relative source import paths before handbook subprocesses change cwd; exercise the exact documented loop in regression tests.
+- Make the candidate-only installation prerequisite explicit, provide a venv/pip recipe, and document pipx/uv installation and PATH setup. Public candidate availability remains a release blocker.
+
 - Preserve unittest subtest failure phases before Python 3.10 defers result callbacks; accept test-body assertions without accepting setup, teardown, cleanup, or runtime failures.
 - Require test-body phase evidence from the bundled Python runner probe; reject unittest setup, teardown and synchronous/asynchronous cleanup assertions, including when run through pytest. Uninstrumented Python wrappers now fail closed.
 - Reconcile nested Node TAP failures with parent tests and suite containers while requiring assertion failures in the children.

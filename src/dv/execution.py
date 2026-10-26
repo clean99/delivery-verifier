@@ -86,9 +86,22 @@ def tap_receipt(text: str) -> tuple[dict, bool]:
             )
         )
     )
+    # Node 20 reports an empty file as a passing test named by its absolute path.
+    # TAP cannot distinguish that from a user test with the same name; neither
+    # supplies unambiguous test-body evidence. Suite containers are already excluded.
+    file_passes = 0
+    for match in re.finditer(
+        r"^ok \d+ - (/[^\n]*)\n(?:  ---\n(.*?)^  \.\.\.$)?", text, re.M | re.S
+    ):
+        if re.search(r" # (?:SKIP|TODO)\b", match[1]):
+            continue
+        if not re.search(r"^  type: 'suite'$", match[2] or "", re.M):
+            file_passes += 1
+    passed = fields["pass"] - file_passes
+    complete &= passed >= 0
     counts.update(
-        executed=fields["pass"] + fields["fail"] + fields["cancelled"],
-        passed=fields["pass"],
+        executed=max(0, passed) + fields["fail"] + fields["cancelled"],
+        passed=max(0, passed),
         failed=fields["fail"] + fields["cancelled"],
         skipped=fields["skipped"] + fields["todo"],
     )

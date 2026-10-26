@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -81,6 +82,44 @@ class ExecutionReceiptTests(unittest.TestCase):
         counts, complete = receipt(log, "unittest")
         self.assertFalse(complete)
         self.assertEqual(counts["passed"], 0)
+
+    @unittest.skipUnless(shutil.which("node"), "Node is optional runner test tooling")
+    def test_node_counts_bodies_not_empty_files_or_suites(self):
+        for source, passed, skipped in (
+            ("", 0, 0),
+            ("const {describe} = require('node:test'); describe('empty', () => {});", 0, 0),
+            ("const {test} = require('node:test'); test('value', () => {});", 1, 0),
+            (
+                "const {test} = require('node:test'); "
+                "test(__filename, {skip: true}, () => {}); test('value', () => {});",
+                1, 1,
+            ),
+            (
+                "const {describe, it} = require('node:test'); "
+                "describe(__filename, () => { it('value', () => {}); });",
+                1, 0,
+            ),
+            ("const {test} = require('node:test'); test(__filename, () => {});", 0, 0),
+        ):
+            with self.subTest(source=source), tempfile.TemporaryDirectory() as directory:
+                empty = Path(directory, "empty file.test.cjs")
+                empty.write_text("")
+                test = Path(directory, "value.test.cjs")
+                test.write_text(source)
+                proc = subprocess.run(
+                    ["node", "--test", "--test-reporter=tap", str(empty), str(test)],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    timeout=15,
+                )
+                self.assertEqual(proc.returncode, 0, proc.stdout)
+                counts, complete = receipt(proc.stdout, "node-test")
+                self.assertTrue(complete, proc.stdout)
+                self.assertEqual(counts, {
+                    "executed": passed, "passed": passed, "failed": 0, "skipped": skipped,
+                }, proc.stdout)
+                phase = {"status": "normal", "exit_code": proc.returncode}
+                self.assertEqual(green_execution(phase, proc.stdout, "node-test")[0], passed > 0)
 
     def test_tap_truncation_cancellation_and_all_skip_fail(self):
         log = (

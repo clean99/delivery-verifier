@@ -86,6 +86,38 @@ class SnapshotFaultTests(unittest.TestCase):
                 self.assertTrue((Path(output["evidence_dir"]) / "red-mutations.json").is_file())
                 self.box.assert_cleaned(before)
 
+    def test_inherited_git_environment_cannot_redirect_to_callers_index(self):
+        source = TEST.replace(
+            "        self.assertEqual",
+            "        subprocess.run(['git', 'update-index', '--assume-unchanged', "
+            "'value.py'], check=True)\n        self.assertEqual",
+        )
+        self.box.write("tests/test_value.py", source)
+        self.box.commit("test: change index from regression command")
+        self.box.write("value.py", "staged caller content\n")
+        git(self.box.root, "add", "value.py")
+        self.box.write("value.py", "unstaged caller content\n")
+        admin = self.box.root / ".git"
+        for inherited in (
+            {"GIT_INDEX_FILE": str(admin / "index")},
+            {
+                "GIT_INDEX_FILE": str(admin / "index"),
+                "GIT_DIR": str(admin),
+                "GIT_COMMON_DIR": str(admin),
+                "GIT_WORK_TREE": str(self.box.root),
+                "GIT_OBJECT_DIRECTORY": str(admin / "objects"),
+            },
+        ):
+            with self.subTest(variables=list(inherited)), patch.dict(self.box.env, inherited):
+                before = self.box.state()
+                output = self.box.prove(expected=1)
+                self.assertEqual(output["red"]["exit_code"], 1)
+                self.assertEqual(output["green"]["exit_code"], 0)
+                for phase in ("red", "green"):
+                    mutations = Path(output["evidence_dir"]) / f"{phase}-mutations.json"
+                    self.assertTrue(json.loads(mutations.read_text())["index_changed"])
+                self.box.assert_cleaned(before)
+
     def test_checkout_hooks_and_smudge_filters_never_run(self):
         self.box.write(".gitattributes", "*.py filter=proof-test\n")
         self.box.commit("test: define a checkout filter")

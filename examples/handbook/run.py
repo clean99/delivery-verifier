@@ -48,8 +48,13 @@ def main() -> int:
     dv = [str(args.dv.resolve())] if args.dv else [sys.executable, "-m", "dv"]
     if args.dv:
         env.pop("PYTHONPATH", None)
-    elif importlib.util.find_spec("dv") is None:
-        env["PYTHONPATH"] = str(ROOT / "src")
+    else:
+        if "PYTHONPATH" in env:
+            env["PYTHONPATH"] = os.pathsep.join(
+                str(Path(entry).resolve()) for entry in env["PYTHONPATH"].split(os.pathsep)
+            )
+        if importlib.util.find_spec("dv") is None:
+            env["PYTHONPATH"] = str(ROOT / "src")
     commands, raw = [], []
 
     def run(argv, *, required=False):

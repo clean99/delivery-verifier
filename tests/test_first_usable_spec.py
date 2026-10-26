@@ -504,6 +504,33 @@ class FirstUsableProofSpec(unittest.TestCase):
         self.assertEqual(output["runner"], "node-test")
         self.assertEqual(output["green"]["tests"]["passed"], 1)
 
+    @unittest.skipUnless(shutil.which("node"), "Node is optional runner test tooling")
+    def test_node_file_success_without_registered_tests_is_rejected(self):
+        self.fixture()
+        self.write(
+            "tests/value.test.cjs",
+            "const test = require('node:test');\n"
+            "const assert = require('node:assert/strict');\n"
+            "const fs = require('node:fs');\n"
+            "if (!fs.readFileSync('value.py', 'utf8').includes('return 42')) {\n"
+            "  test('value', () => assert.equal(21, 42));\n"
+            "}\n",
+        )
+        self.commit("test: omit all Node tests at head")
+        before = self.state()
+        output = self.prove(
+            command=["node", "--test", "--test-reporter=tap", "tests/value.test.cjs"], expected=1
+        )
+        self.assertEqual(output["red"]["exit_code"], 1)
+        self.assertEqual(output["green"]["exit_code"], 0)
+        self.assertEqual(output["green"]["tests"]["executed"], 0)
+        self.assertEqual(output["green"]["tests"]["passed"], 0)
+        checks = {check["check"]: check["outcome"] for check in output["checks"]}
+        self.assertEqual(checks["red assertion"], "pass")
+        self.assertEqual(checks["green execution"], "fail")
+        self.evidence(output)
+        self.assert_cleaned(before)
+
 
 if __name__ == "__main__":
     unittest.main()

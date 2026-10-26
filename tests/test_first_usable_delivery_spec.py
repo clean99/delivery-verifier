@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -93,6 +94,36 @@ class FirstUsableHandbookSpec(unittest.TestCase):
                             self.assertEqual(observed["green_executed"], 0)
                         else:
                             self.assertNotEqual(observed["review_head"], observed["head"])
+
+    def test_exact_documented_loop_with_relative_pythonpath(self):
+        text = (ROOT / "docs/handbook/green-tests.md").read_text()
+        command = re.search(r"```sh\n(.*?)```", text, re.S)[1]
+        with tempfile.TemporaryDirectory(prefix="dv-handbook-command-") as temporary:
+            directory = Path(temporary)
+            shutil.copytree(ROOT / "examples/handbook", directory / "examples/handbook")
+            (directory / "src").symlink_to(ROOT / "src", target_is_directory=True)
+            bins = directory / "bin"
+            bins.mkdir()
+            (bins / "python").symlink_to(sys.executable)
+            env = environment()
+            env["PATH"] = str(bins) + os.pathsep + env.get("PATH", "")
+            proc = subprocess.run(
+                ["sh", "-c", command], cwd=directory, env=env,
+                capture_output=True, text=True, timeout=120,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+            records = [json.loads(line) for line in proc.stdout.splitlines()]
+            self.assertEqual(
+                {(record["case"], record["backend"]) for record in records},
+                {(case, backend) for case in CASES for backend in ("native", "dv")},
+            )
+            self.assertEqual(len(records), 8)
+            for record in records:
+                self.assertTrue(record["completed"], record)
+                self.assertEqual(record["exit_code"], 0 if record["backend"] == "native" else 1)
+                output = directory / ".dv/handbook" / f"{record['case']}-{record['backend']}"
+                self.assertEqual(json.loads((output / "result.json").read_text()), record)
+                self.assertTrue((output / "raw.log").read_text().strip())
 
 
 class FirstUsableInstallSpec(unittest.TestCase):

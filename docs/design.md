@@ -12,6 +12,8 @@ The local commands, validation, evidence records, and optional hook adapters are
 
 `dv prove --test COMMAND` executes committed snapshots in separate detached worktrees without creating an item. It leaves caller changes alone, requires assertion-only red plus a completed green report with a passed test body, and stores each attempt under Git's administrative `dv/proofs/` directory. Hygiene and review are explicitly requested with `--hygiene` and `--require-review ITEM`. The command does not substitute for a delivery gate or weaken its hooks.
 
+Proof subprocesses discard inherited `GIT_*` variables, including repository/index locators, while retaining other environment settings. Ordinary Git operations therefore target the detached execution worktree; this is not protection against commands deliberately addressing another path. Node TAP file-only successes are excluded from green's executed/passed counts. Node 20 renders these like top-level tests named by absolute paths, so those ambiguous test names are excluded as well; suite containers remain excluded by Node's own counts.
+
 The [first-usable contract and validation record](design/first-usable-version.md) defines ref resolution, raw-blob materialization, retained tests, execution counts, cleanup and installation acceptance. The [handbook](handbook/green-tests.md) provides pinned synthetic replays and remaining blind spots. The sections below continue to describe the separate item-based delivery workflow.
 
 ## Verification ladder

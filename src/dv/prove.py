@@ -148,10 +148,9 @@ def run(
             for phase, ref, entries in (("red", base, red_tree), ("green", head, head_tree)):
                 worktree, cache = snapshots.create(phase, ref, entries)
                 env = {
-                    **os.environ,
-                    "PYTHONPYCACHEPREFIX": str(cache),
-                    "PYTHONDONTWRITEBYTECODE": "1",
+                    key: value for key, value in os.environ.items() if not key.startswith("GIT_")
                 }
+                env.update(PYTHONPYCACHEPREFIX=str(cache), PYTHONDONTWRITEBYTECODE="1")
                 before = file_state(worktree.root, entries)
                 index = worktree.git_path("index").read_bytes()
                 log = directory / f"{phase}.log"
