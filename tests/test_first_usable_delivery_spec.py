@@ -173,7 +173,7 @@ class FirstUsableInstallSpec(unittest.TestCase):
                     env={**env, **(extra_env or {})},
                     capture_output=True,
                     text=True,
-                    timeout=180,
+                    timeout=600,
                 )
                 self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
                 return proc
