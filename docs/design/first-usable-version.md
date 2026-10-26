@@ -1,12 +1,12 @@
 # First usable version
 
-Status: implementation contract, not released functionality. Baseline: `aeec479965619bb5325cbccfcd7e94fb1e962ce8` (`0.1.0.dev0`). Acceptance IDs A01–A21 are executable in `tests/test_first_usable_spec.py` and `tests/test_first_usable_delivery_spec.py`. Expected failures do not count as accepted cases.
+Status: implemented in development source, not released. Implementation: `cf4dbf82bc90dd96919435b0cf8f6cf529b81213` (`0.1.0.dev0`), plus the handbook and distribution-resource changes accompanying this document. Frozen baseline: `aeec479965619bb5325cbccfcd7e94fb1e962ce8`. Acceptance IDs A01–A21 remain executable in `tests/test_first_usable_spec.py` and `tests/test_first_usable_delivery_spec.py`; their assertions are unchanged and expected-failure markers have been removed. A21 and full release validation remain blocked; see the execution record below.
 
 ## Decision
 
 Add `dv prove`: one supplied test command, committed source snapshots, local red/green evidence. No item creation, JSON editing, implementer label, review, approval, static check, or full-suite configuration is required on this path. Keep the existing `init`, `redgreen`, `gate`, review and approval interfaces unchanged; do not weaken an existing delivery gate or hook by silently substituting proof-only success.
 
-Today, `cli.build_parser` requires an item for `redgreen`; `redgreen.run` replaces production files in the caller's checkout; `gate.evaluate` requires hygiene, configured checks and review. Reuse `runners` assertion classification, the Python phase probe, `process.run` process-group cleanup, `checker_digest`, and content-bound review validation. Add a separate snapshot executor rather than wrapping the in-place executor around the user's files.
+The legacy `redgreen` command still requires an item and temporarily replaces production files in the caller's checkout; `gate.evaluate` still requires hygiene, configured checks and review. The separate `prove` and `snapshots` modules reuse assertion classification, the Python phase probe, `process.run` process-group cleanup, `checker_digest`, and content-bound review validation. They do not wrap the in-place executor around the user's files.
 
 Success means the selected test distinguishes the selected implementations. It does not mean the whole project was tested, the fix is correct, or a person approved delivery.
 
@@ -115,9 +115,9 @@ These are first-party documentation readings, **not comparative runs**. Carry th
 Run from the repository root with already prepared tooling:
 
 ```sh
-# Normal suite: pending cases are expected failures, not accepted cases.
+# Normal suite: acceptance cases are ordinary tests, not expected failures.
 HUSKY=0 LEFTHOOK=0 UV_NO_CACHE=1 PYTHONPATH=src python -m unittest discover -s tests -v
-# Spec oracle: pending cases must genuinely fail until implemented.
+# Focused oracle: DV_SPEC_STRICT is retained for old command-line recipes; no exemptions remain.
 HUSKY=0 LEFTHOOK=0 UV_NO_CACHE=1 DV_SPEC_STRICT=1 PYTHONPATH=src \
   python -m unittest discover -s tests -p 'test_first_usable*spec.py' -v
 # Release oracle: includes clean build/install tests; requires disk and network for installers.
@@ -126,7 +126,65 @@ HUSKY=0 LEFTHOOK=0 UV_NO_CACHE=1 DV_SPEC_STRICT=1 DV_SPEC_INSTALL=1 PYTHONPATH=s
 HUSKY=0 LEFTHOOK=0 UV_NO_CACHE=1 ruff check .
 ```
 
-Remove each `@pending` marker when its implementation lands; an unexpected success fails the ordinary unittest run so completed work cannot stay hidden as expected debt. The strict run removes only those markers, not assertions. Missing optional prerequisites must be reported separately from implementation failures. Spec completion freezes tests; Build completion requires 21/21 accepted IDs, the existing regression suite, Ruff, the demo and the four-version installation matrix. Add deeper fault-injection coverage for partial worktree creation/removal and tracked-input mutation while implementing the executor; existing process/runner regression cases remain required.
+All `@pending` markers have been removed without changing their assertions. A21 still requires `DV_SPEC_INSTALL=1`; a skipped installation check is not acceptance. CI now installs pipx 1.7.1 and enables A21 on Python 3.10–3.13. Build completion requires 21/21 accepted IDs, the existing regression suite, Ruff, the demo and the four-version installation matrix. Added fault-injection coverage exercises partial creation, removal failure, symlink-replaced cleanup targets, raw materialization collisions, tracked/index mutation, committed policy, test support/modes and filter/hook suppression. Existing process/runner regression cases remain required.
+
+## Execution record: 2026-10-26
+
+Source implementation `cf4dbf82bc90dd96919435b0cf8f6cf529b81213`; handbook/resources are the accompanying change. **A01–A20 passed on all four supported Python minors. A21 was skipped, so acceptance is 20/21, not 21/21.** No expected failures remain. The full existing unit suite, wheel/sdist build and clean installation matrix were not run because the required 5 GiB disk gate failed. No installed-artifact or release-readiness claim is made.
+
+The focused command below covers acceptance, the new execution/lifecycle faults and the existing Python/Node reporter regressions. It is not the full repository suite. Commands use checkout-relative paths to avoid checking machine-specific paths into this public repository; exact local invocations and outputs are retained under the ignored `.dv/spec/` directory.
+
+```sh
+HUSKY=0 LEFTHOOK=0 UV_NO_CACHE=1 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:tests \
+  python -m unittest test_first_usable_spec test_first_usable_delivery_spec \
+  test_execution test_prove_faults test_runner_phases test_node_runner -v
+```
+
+| Interpreter | Passed / discovered | Skipped | Acceptance |
+| --- | ---: | --- | --- |
+| Python 3.10.20 | 48/49 | A21 | 20/21 |
+| Python 3.11.15 | 48/49 | A21 | 20/21 |
+| Python 3.12.13 | 48/49 | A21 | 20/21 |
+| Python 3.13.14 | 48/49 | A21 | 20/21 |
+
+The Python 3.12 terminal summary was:
+
+```text
+Ran 49 tests in 77.768s
+
+OK (skipped=1)
+```
+
+Prepared tooling: pytest 8.4.2, setuptools 80.9.0, Node 20.20.2, Git 2.50.1 (Apple Git-155), Ruff 0.17.1. No dependencies were installed for these runs. CI's only code-quality command is `ruff check .`; no separate format/type command is configured. Repository lint and whitespace checks completed:
+
+```sh
+HUSKY=0 LEFTHOOK=0 UV_NO_CACHE=1 ruff check .
+git diff --check
+```
+
+```text
+All checks passed!
+```
+
+The [handbook replay loop](../handbook/green-tests.md#reproduction-environment) completed 8/8 native/dv combinations with the pinned Python 3.12 toolchain. Its source-only results and the demonstrated partial-selection blind spot are recorded in the handbook. These runs do not satisfy the installed-wheel handbook requirement.
+
+The attempted full-suite/build/install gate was:
+
+```sh
+available=$(df -k /System/Volumes/Data | awk 'NR==2{print $4}')
+if test "$available" -ge 5242880; then
+  HUSKY=0 LEFTHOOK=0 UV_NO_CACHE=1 PYTHONDONTWRITEBYTECODE=1 \
+    DV_SPEC_INSTALL=1 PYTHONPATH=src:tests python -m unittest discover -s tests -v
+else
+  printf 'BLOCKED: full unit suite and build/install matrix require 5242880 KiB; available=%s KiB. No build or install was started.\\n' "$available"
+fi
+```
+
+```text
+BLOCKED: full unit suite and build/install matrix require 5242880 KiB; available=3226124 KiB. No build or install was started.
+```
+
+After sufficient disk space is available, rerun the complete suite and A21 on all four interpreters, build from the final candidate commit, and execute a bundled handbook case using a fresh artifact-installed CLI with `PYTHONPATH` removed. `DV_SPEC_INSTALL=1` includes six installer/source combinations per interpreter: pip and pipx, each with wheel, sdist and Git. Public immutable-URL rehearsal remains separate. Nothing was pushed, published or released.
 
 ## Out of scope
 

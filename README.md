@@ -1,6 +1,6 @@
 # delivery-verifier
 
-**`dv` checks that your regression test fails without the fix and passes with it, then binds review and approval records to the exact commit.**
+**`dv prove` checks whether your regression test fails without the fix and actually passes with it. Optional delivery gates bind review and approval records to the exact commit.**
 
 For people shipping changes written by coding agents. Runs locally with any agent that can execute a command.
 
@@ -12,17 +12,36 @@ For people shipping changes written by coding agents. Runs locally with any agen
 
 ## Quick start
 
-Python 3.10+, Git 2.38+, Linux/macOS. From a directory where you keep checkouts:
+Python 3.10–3.13, Git 2.38+, Linux/macOS. Install this development checkout:
 
 ```sh
 git clone https://github.com/clean99/delivery-verifier.git
 cd delivery-verifier
-python3 examples/demo/run.py
+pipx install .
 ```
 
-After cloning, the demo runs offline from source with no installation, model calls, accounts, or third-party runtime dependencies. It creates a temporary repository under the checkout's ignored `.dv/` directory and removes it and its logs afterward. Your existing Git configuration stays unchanged.
+In **your project's repository**, with the fix and regression test committed on a branch based on local `main`, run:
 
-**Current limits:** 0.1.0 is in development. Focused regression proof supports unittest, pytest and Node's TAP reporter; Jest/Vitest are unsupported. Commands run with your permissions, without a sandbox. A passing proof distinguishes the two implementations for the supplied test; a reviewer must still judge whether it tests the right behavior. Reviewer identities and approval records are self-reported, not authenticated. See [security and restoration limits](SECURITY.md).
+```sh
+dv prove --test "python -m unittest discover -s tests -p test_words.py -v"
+```
+
+No item file or JSON editing is needed. Red runs at the merge base of `main` and `HEAD` with head's tests retained; green runs at `HEAD`, in a separate detached worktree. The command requires an assertion-only red failure and a complete green report with at least one passed test body. It rejects a hollow assertion, a runtime/import failure, zero executed green, and all-skipped green.
+
+Use `--base REF --head REF` to select committed revisions, `--test-file checks/regression.py` for a custom pure test file, and `--json` for machine-readable output. Other supported recipes:
+
+```sh
+dv prove --test "python -m pytest --tb=long tests/test_words.py"
+dv prove --test "node --test --test-reporter=tap tests/words.test.cjs"
+```
+
+Hygiene and review are opt-in: add `--hygiene` or `--require-review .dv/item.json`. The latter consumes an existing matching review from the item workflow below. Default proof does not run configured full-suite checks or approve delivery; the legacy `gate` and hooks retain their own requirements.
+
+**Committed snapshots only.** Staged, unstaged, untracked and ignored caller files are excluded and left untouched. Policy comes from committed head. Each attempt records `proof.json`, `red.log` and `green.log` under the Git administrative `dv/proofs/` directory and removes its execution worktrees and caches. The CLI prints the exact evidence directory. Failure and interruption never reuse a previous PASS; a leftover recovery record needs targeted inspection, not a global worktree prune.
+
+**Current limits:** 0.1.0 is in development; release/install acceptance is still pending. unittest, pytest and Node TAP are supported; Jest/Vitest, native Windows, submodule/LFS hydration, and automatic dependency installation are outside this version. Commands are POSIX-split argv, with no implicit shell expansion or pipelines. Prepare dependencies yourself; editable installs pointing to another checkout can defeat source isolation. Worktrees are **not a security sandbox**: commands retain your filesystem/network privileges. Logs remain local and can contain secrets. A passed proof establishes neither complete test coverage nor assertion correctness; reviewer identities are self-reported. See [the reproducible handbook](docs/handbook/green-tests.md), [implementation and validation status](docs/design/first-usable-version.md), and [security limits](SECURITY.md).
+
+For an offline source-only example, run `python3 examples/demo/run.py` from this checkout. It demonstrates the separate item-based delivery gate with synthetic review evidence.
 
 ## What the demo checks
 
@@ -91,7 +110,7 @@ Build artifacts with `uv build`. The build backend normalizes sdist ownership to
 
 A new commit or amendment invalidates prior evidence. Evidence also binds a SHA-256 digest of the installed checker's Python sources, including its version and bundled parser. Updating or editing the checker invalidates red/green proof, review, and approval; records without this binding must be regenerated. Changes to the merge base, item settings, effective configuration, delivery text, or runtime files also require fresh evidence. Changing the review invalidates approval. Cached `gate.json` is never an authorization input.
 
-## Use it on your change
+## Optional item-based delivery workflow
 
 Start in a repository with an existing commit and a local base branch, such as `main`. Work on a separate branch. Install dependencies yourself and declare the repository's actual checks in `.dv.toml`:
 
@@ -145,7 +164,7 @@ Unsupported reporters, including Jest/Vitest, bare scripts, and suppressed trace
 
 Paths are relative to the repository root. An optional `description_file` points to ignored local delivery text, such as `.dv/description.txt`; `runtime_files` references ignored evidence files. Use a separate ignored directory for each additional item.
 
-Commit the code, tests, and check configuration before verification. `dv` requires a clean committed worktree, including no nonignored untracked files; it never stashes your work or commits for you.
+Commit the code, tests, and check configuration before item-based verification. The legacy `redgreen` and `gate` workflow requires a clean committed worktree, including no nonignored untracked files; it never stashes your work or commits for you. The separate `prove` command accepts a dirty caller checkout and executes only committed snapshots.
 
 ```sh
 dv redgreen .dv/item.json

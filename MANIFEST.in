@@ -1,5 +1,8 @@
 include README.md README.zh-CN.md CONTRIBUTING.md SECURITY.md CHANGELOG.md LICENSE
 include docs/design.md
+include docs/design/first-usable-version.md
+recursive-include docs/handbook *.md *.json
+recursive-include examples/handbook *.py
 include docs/assets/demo.gif
 include build_backend.py
 include examples/demo/run.py

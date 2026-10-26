@@ -1,8 +1,4 @@
-"""First-usable acceptance contract; DV_SPEC_STRICT=1 exposes pending failures.
-
-Expected failures are implementation debt, not passing acceptance checks. Remove
-pending markers as each contract lands; unexpected successes fail the normal suite.
-"""
+"""Frozen first-usable proof acceptance; no expected-failure exemptions."""
 
 from __future__ import annotations
 
@@ -21,10 +17,6 @@ import unittest
 from pathlib import Path
 
 from support import ROOT, Sandbox, git
-
-
-def pending(test):
-    return test if os.environ.get("DV_SPEC_STRICT") == "1" else unittest.expectedFailure(test)
 
 
 def environment():

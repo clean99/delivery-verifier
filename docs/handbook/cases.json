@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "toolchain": {
+    "python": "3.12.13",
+    "pytest": "8.4.2",
+    "node": "20.20.2",
+    "dv_commit": "cf4dbf82bc90dd96919435b0cf8f6cf529b81213"
+  },
+  "cases": [
+    {
+      "id": "hollow-test",
+      "license": "Apache-2.0",
+      "origin": "synthetic",
+      "fixtures": ["base_value.py", "fixed_value.py", "hollow.py"],
+      "native_command": "python examples/handbook/run.py --case hollow-test --backend native --output case-hollow-native --json",
+      "dv_command": "python examples/handbook/run.py --case hollow-test --backend dv --output case-hollow-dv --json",
+      "expected_output": {"native_exit": 0, "dv_exit": 1, "red_exit": 0, "green_exit": 0},
+      "dv_limit": "A distinguishing assertion may still miss inputs or test the wrong requirement.",
+      "comparisons": [
+        {"tool": "trustbut 0.7.0", "evidence": "documentation-only", "source": "https://github.com/isAlmogK/trustbut/blob/248606877b49b8975aeea4c01c70933058105c2b/README.md", "scope": "Already documents counterfactual testing of new/changed tests on prior code."},
+        {"tool": "Trail of Bits Regression Hunt", "evidence": "documentation-only", "source": "https://github.com/trailofbits/skills/blob/196a9073ab10d35bacf111f945e02c00b2c6883a/plugins/regression-hunt/README.md", "scope": "Agent-coordinated snapshot and independent PoC replay, with host prerequisites."},
+        {"tool": "Bugsweep", "evidence": "documentation-only", "source": "https://github.com/shanemhamilton/bugsweep/blob/5410ec6da58de483517017c808746781c1048d6c/README.md", "scope": "Documents expected assertion failure before the fix and unchanged tests passing afterward."}
+      ]
+    },
+    {
+      "id": "wrong-failure",
+      "license": "Apache-2.0",
+      "origin": "synthetic",
+      "fixtures": ["runtime_value.py", "fixed_value.py", "regression.py"],
+      "native_command": "python examples/handbook/run.py --case wrong-failure --backend native --output case-wrong-native --json",
+      "dv_command": "python examples/handbook/run.py --case wrong-failure --backend dv --output case-wrong-dv --json",
+      "expected_output": {"native_exit": 0, "dv_exit": 1, "red_exit": 1, "green_exit": 0, "red_contains": "RuntimeError"},
+      "dv_limit": "An unrelated assertion in an accepted test phase can look valid; intent is not inferred.",
+      "comparisons": [
+        {"tool": "trustbut 0.7.0", "evidence": "documentation-only", "source": "https://github.com/isAlmogK/trustbut/blob/248606877b49b8975aeea4c01c70933058105c2b/README.md", "scope": "Counterfactual execution overlaps this workflow; this fixture was not run against trustbut."},
+        {"tool": "Trail of Bits Regression Hunt", "evidence": "documentation-only", "source": "https://github.com/trailofbits/skills/blob/196a9073ab10d35bacf111f945e02c00b2c6883a/plugins/regression-hunt/README.md", "scope": "Documents independent replay and adjudication of evidence, not a measured classification result here."},
+        {"tool": "Bugsweep", "evidence": "documentation-only", "source": "https://github.com/shanemhamilton/bugsweep/blob/5410ec6da58de483517017c808746781c1048d6c/README.md", "scope": "Expected assertion failure is part of its documented proof contract."}
+      ]
+    },
+    {
+      "id": "not-run",
+      "license": "Apache-2.0",
+      "origin": "synthetic",
+      "fixtures": ["base_value.py", "fixed_value.py", "not_run.py"],
+      "native_command": "python examples/handbook/run.py --case not-run --backend native --output case-not-run-native --json",
+      "dv_command": "python examples/handbook/run.py --case not-run --backend dv --output case-not-run-dv --json",
+      "expected_output": {"native_exit": 0, "dv_exit": 1, "red_exit": 1, "green_exit": 0, "green_executed": 0},
+      "dv_limit": "Omitting one test while another passes can remain undetected; no full-suite or test-identity equivalence claim.",
+      "comparisons": [
+        {"tool": "trustbut 0.7.0", "evidence": "documentation-only", "source": "https://github.com/isAlmogK/trustbut/blob/248606877b49b8975aeea4c01c70933058105c2b/README.md", "scope": "Documents execution receipts with test/skipped counts and more reporters than dv."},
+        {"tool": "Trail of Bits Regression Hunt", "evidence": "documentation-only", "source": "https://github.com/trailofbits/skills/blob/196a9073ab10d35bacf111f945e02c00b2c6883a/plugins/regression-hunt/README.md", "scope": "Documents deployment and replay of both snapshots with sealed evidence."},
+        {"tool": "Bugsweep", "evidence": "documentation-only", "source": "https://github.com/shanemhamilton/bugsweep/blob/5410ec6da58de483517017c808746781c1048d6c/README.md", "scope": "Documents native test-identity suite comparison, beyond dv's aggregate count check."}
+      ]
+    },
+    {
+      "id": "stale-review",
+      "license": "Apache-2.0",
+      "origin": "synthetic",
+      "fixtures": ["base_value.py", "fixed_value.py", "regression.py"],
+      "native_command": "python examples/handbook/run.py --case stale-review --backend native --output case-stale-native --json",
+      "dv_command": "python examples/handbook/run.py --case stale-review --backend dv --output case-stale-dv --json",
+      "expected_output": {"native_exit": 0, "dv_exit": 1, "green_exit": 0, "optional_review": "fail"},
+      "dv_limit": "Current reports may be shallow, forged or falsely attributed; identities are not authenticated. Default proof does not require review.",
+      "comparisons": [
+        {"tool": "trustbut 0.7.0", "evidence": "documentation-only", "source": "https://github.com/isAlmogK/trustbut/blob/248606877b49b8975aeea4c01c70933058105c2b/README.md", "scope": "Documents receipts; no review-authentication or fixture result is inferred here."},
+        {"tool": "Trail of Bits Regression Hunt", "evidence": "documentation-only", "source": "https://github.com/trailofbits/skills/blob/196a9073ab10d35bacf111f945e02c00b2c6883a/plugins/regression-hunt/README.md", "scope": "Documents adjudication and sealed evidence in its coordinated investigation workflow."},
+        {"tool": "Bugsweep", "evidence": "documentation-only", "source": "https://github.com/shanemhamilton/bugsweep/blob/5410ec6da58de483517017c808746781c1048d6c/README.md", "scope": "Documents native review receipts and external execution policy; no measured guarantees asserted."}
+      ]
+    }
+  ]
+}

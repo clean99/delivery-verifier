@@ -1,6 +1,6 @@
 # delivery-verifier
 
-**`dv` 检查回归测试能否在撤去修复后失败、恢复修复后通过，并把评审和批准记录绑定到确切的提交。**
+**`dv prove` 检查回归测试能否在撤去修复后失败、恢复修复后实际执行并通过。可选的交付关卡把评审和批准记录绑定到确切的提交。**
 
 面向需要交付编码 Agent 所写改动的开发者。在本机运行，适用于能执行命令的编码 Agent。
 
@@ -10,19 +10,38 @@
 
 *动图节选虚构示例的真实 CLI 输出，调整停留时间方便阅读。示例使用模拟评审记录，保留人工批准这一步。*
 
-## 快速体验：运行离线示例
+## 快速开始：一条命令验证回归
 
-准备 Python 3.10+、Git 2.38+ 和 Linux/macOS，在存放代码的目录执行：
+准备 Python 3.10–3.13、Git 2.38+ 和 Linux/macOS，安装当前开发版源码：
 
 ```sh
 git clone https://github.com/clean99/delivery-verifier.git
 cd delivery-verifier
-python3 examples/demo/run.py
+pipx install .
 ```
 
-克隆后，示例直接读取源码离线运行，无需安装、模型调用、账号或第三方运行时依赖。脚本在已忽略的 `.dv/` 目录下创建临时仓库，结束后删除临时仓库及日志，保留原有 Git 配置。
+进入**自己的项目仓库**，在基于本地 `main` 的分支上提交修复和回归测试，然后运行：
 
-**当前范围：** 0.1.0 正在开发。回归证明支持 unittest、pytest 和 Node 的 TAP 报告，Jest/Vitest 暂不支持。命令按当前用户权限执行，沙箱需另行准备。通过的证明说明该测试能区分两份实现，测试是否覆盖目标行为仍需评审者判断。评审者身份及批准记录依赖如实声明。安全与文件恢复的限制见 [SECURITY.md](SECURITY.md)。
+```sh
+dv prove --test "python -m unittest discover -s tests -p test_words.py -v"
+```
+
+直接传入测试命令即可，工作项和手动编辑 JSON 均可省去。Red 在 `main` 与 `HEAD` 的合并基点执行，并保留 head 的测试；green 在另一份 detached worktree 中执行 `HEAD`。通过条件是 red 在测试体断言处失败，green 提供完整报告且至少一个测试体通过。空洞断言、运行或导入错误、green 漏跑及全跳过都会被拒绝。
+
+用 `--base REF --head REF` 指定已提交版本，`--test-file checks/regression.py` 补充自定义纯测试文件，`--json` 输出机器可读结果。其他受支持的命令示例：
+
+```sh
+dv prove --test "python -m pytest --tb=long tests/test_words.py"
+dv prove --test "node --test --test-reporter=tap tests/words.test.cjs"
+```
+
+差异检查通过 `--hygiene` 开启；评审检查通过 `--require-review .dv/item.json` 开启，并读取下文工作项流程中已有的匹配评审。默认只执行指定的回归命令。完整测试套件、交付批准和旧 gate/hook 规则仍由工作项流程负责。
+
+**执行范围是已提交快照。** 暂存、未暂存、未跟踪和已忽略的本地文件留在原处，执行目录排除这些文件。配置读取已提交的 head。每次尝试在 Git 管理目录的 `dv/proofs/` 下保存独立的 `proof.json`、`red.log` 和 `green.log`，命令结束后清理本次执行目录及缓存。CLI 会打印证据目录。失败和中断保留失败状态；遗留恢复记录需要按所列路径检查，避免全仓 worktree prune。
+
+**当前边界：** 0.1.0 正在开发，发布及安装验收仍待完成。支持 unittest、pytest 和 Node TAP；Jest/Vitest、原生 Windows、submodule/LFS 还原及自动安装依赖暂不支持。命令经 POSIX 参数切分后直接执行，shell 展开和管道需由调用者另行处理。依赖由用户准备；指向其他工作区的 editable install 会破坏源码隔离。Worktree 只隔离执行目录，**安全沙箱需另行准备**，命令仍拥有当前用户的文件和网络权限。日志保存在本机，可能包含敏感信息。证明通过说明所选测试区分了两份实现，完整覆盖和断言语义仍需人工判断。评审身份依赖如实声明。参见[可复跑手册](docs/handbook/green-tests.md)、[实现与验收状态](docs/design/first-usable-version.md)和[安全边界](SECURITY.md)。
+
+源码离线示例仍可通过 `python3 examples/demo/run.py` 运行，演示独立的工作项交付流程，并使用模拟评审记录。
 
 ## 示例：检查连续空格的修复
 
@@ -91,7 +110,7 @@ dv --help
 
 新提交或 amend 会让原证据失效。证据还绑定当前安装的检查器 Python 源码 SHA-256 摘要，涵盖版本定义和内置解析器。升级或修改检查器后，red/green、评审和批准均需重做；缺少此绑定的旧记录也需重新生成。合并基点、工作项设置、有效配置、交付文案或运行附件改变后，也要重新收集证据。评审改变后需要重新批准。每次运行 gate 都重新检查，磁盘上的旧 `gate.json` 仅供查看。
 
-## 使用流程：验证当前改动
+## 可选流程：工作项与交付关卡
 
 仓库需要已有提交和本地基线分支，例如 `main`；在另一条分支上实现改动。自行准备依赖，并在 `.dv.toml` 中配置仓库真实使用的检查命令：
 
@@ -147,7 +166,7 @@ Jest/Vitest、裸脚本、隐藏堆栈等暂不支持的报告格式会验证失
 
 路径均相对于仓库根目录。可选字段 `description_file` 指向已忽略的本地交付文案，例如 `.dv/description.txt`；`runtime_files` 指向已忽略的运行证据文件。多个工作项各用一个独立的忽略目录。
 
-验证前先提交代码、测试和检查配置。`dv` 要求干净的已提交工作树，连未忽略的未跟踪文件也需处理；暂存和提交由你完成。
+工作项验证前先提交代码、测试和检查配置。旧 `redgreen` 与 `gate` 流程要求干净的已提交工作树，未忽略的未跟踪文件也需处理；暂存和提交由你完成。独立的 `prove` 命令保留本地未提交改动，仅执行已提交快照。
 
 ```sh
 dv redgreen .dv/item.json

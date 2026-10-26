@@ -8,6 +8,12 @@ A coding agent can finish a change that looks convincing but is not ready to lea
 
 The local commands, validation, evidence records, and optional hook adapters are implemented. Verification never substitutes a placeholder PASS for an unperformed check. The contracts below describe the implementation and its deliberate limits.
 
+## Proof-only entry point
+
+`dv prove --test COMMAND` executes committed snapshots in separate detached worktrees without creating an item. It leaves caller changes alone, requires assertion-only red plus a completed green report with a passed test body, and stores each attempt under Git's administrative `dv/proofs/` directory. Hygiene and review are explicitly requested with `--hygiene` and `--require-review ITEM`. The command does not substitute for a delivery gate or weaken its hooks.
+
+The [first-usable contract and validation record](design/first-usable-version.md) defines ref resolution, raw-blob materialization, retained tests, execution counts, cleanup and installation acceptance. The [handbook](handbook/green-tests.md) provides pinned synthetic replays and remaining blind spots. The sections below continue to describe the separate item-based delivery workflow.
+
 ## Verification ladder
 
 | Level | Question | Evidence and gate behavior |
@@ -65,7 +71,7 @@ State moves `preparing` to `ready` after a successful readiness gate, and to `ap
 
 ### Evidence binding
 
-The inspected scope is the full `HEAD` commit ID plus the current merge-base commit ID. Abbreviated IDs are accepted as Git input only where a ref is expected; stored evidence and `--head` require full IDs (40 hexadecimal characters for SHA-1, 64 for SHA-256).
+The inspected scope is the full `HEAD` commit ID plus the current merge-base commit ID. Abbreviated IDs are accepted as Git input where a ref is expected. Stored evidence and the review/approval commands' `--head` require full IDs (40 hexadecimal characters for SHA-1, 64 for SHA-256); `prove --head` accepts a local ref and records its resolved full ID.
 
 Work-item evidence records carry `schema_version`, `at` (UTC timestamp), `head_sha`, `base_sha`, `checker_sha256`, and `context_sha256`. The initialization result has no context hash; the item is still an incomplete template. The context hash covers canonical JSON of the validated item with defaults (excluding only `status` and `blocked_reason`), effective configuration, both commit IDs, the checker digest, and the content hashes of the description/runtime files. Canonical JSON uses sorted keys, compact separators, UTF-8, and rejects non-finite numbers. Optional absent files have a null hash, not an empty-file hash.
 

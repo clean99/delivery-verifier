@@ -4,6 +4,12 @@
 
 ### Added
 
+- `dv prove --test COMMAND`: one-command proof of committed base/head snapshots in separate detached worktrees, without item setup or a clean caller checkout.
+- Positive green execution receipts for unittest, pytest and Node TAP; reject missing reports, all-skipped/expected-failure green, and abnormal execution.
+- Per-attempt local logs, input hashes and recovery records; retain test bytes/modes, reject tracked-input mutations, and clean only owned worktrees and caches without checkout hooks or smudge filters.
+- Explicit `--hygiene` and `--require-review` checks on the proof-only path; legacy delivery gates and hooks keep their existing requirements.
+- A pinned, Apache-2.0 synthetic handbook covering hollow tests, wrong-reason failures, missed execution and stale reviews, with a replay driver and packaged resources. Source replay passed 8/8 combinations at implementation `cf4dbf8`; release/install acceptance remains pending.
+
 - Local `dv` CLI for initializing work items, regression proof, hygiene checks, review records, readiness gates, and explicit human approval.
 - Red-to-green execution that retains regression tests, temporarily removes production changes, records both runs, and attempts worktree restoration on failures.
 - Hygiene checks for new comments, authorship footers, debugging remnants, focused and weak tests, lockfiles, unfinished work, and whitespace; separate source/test/generated size counts and Rust inline-test recognition.

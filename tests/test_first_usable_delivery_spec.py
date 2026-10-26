@@ -13,13 +13,12 @@ from pathlib import Path
 
 import test_first_usable_spec as proof_spec
 from support import ROOT
-from test_first_usable_spec import COMMAND, environment, pending
+from test_first_usable_spec import COMMAND, environment
 
 CASES = ("hollow-test", "wrong-failure", "not-run", "stale-review")
 
 
 class FirstUsableHandbookSpec(unittest.TestCase):
-    @pending
     def test_A19_handbook_has_pinned_licensed_cases_and_fair_comparisons(self):
         handbook = ROOT / "docs/handbook/green-tests.md"
         manifest = ROOT / "docs/handbook/cases.json"
@@ -49,7 +48,6 @@ class FirstUsableHandbookSpec(unittest.TestCase):
                 self.assertRegex(comparison["source"], r"https://github.com/.+/blob/[0-9a-f]{40}/")
                 self.assertTrue(comparison["scope"])
 
-    @pending
     def test_A20_all_four_cases_replay_native_and_dv_with_raw_logs(self):
         runner = ROOT / "examples/handbook/run.py"
         self.assertTrue(runner.is_file(), "SPEC pending: handbook case runner is absent")
@@ -98,7 +96,6 @@ class FirstUsableHandbookSpec(unittest.TestCase):
 
 
 class FirstUsableInstallSpec(unittest.TestCase):
-    @pending
     def test_A21_wheel_sdist_and_git_install_with_pip_and_pipx(self):
         probe = subprocess.run(
             [sys.executable, "-m", "dv", "prove", "--help"],
