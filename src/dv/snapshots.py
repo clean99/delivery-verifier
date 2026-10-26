@@ -43,6 +43,8 @@ def tree(repo: Repo, ref: str) -> dict[str, Entry]:
         mode, kind, oid = header.decode("ascii").split()
         path = os.fsdecode(raw_path)
         config.relative(path, "tracked path")
+        if any(part.rstrip(". ").casefold() == ".git" for part in Path(path).parts):
+            raise DVError(f"Reserved Git administrative path: {path}", 2, "unsupported_path")
         if kind != "blob" or mode not in ("100644", "100755", "120000"):
             raise DVError(
                 f"Unsupported materialization (including submodules): {path}", 2, "unsupported_path"
@@ -177,7 +179,8 @@ class Snapshots:
                     )
                 links.append((target, destination))
             else:
-                target.write_bytes(data)
+                with target.open("xb") as stream:
+                    stream.write(data)
                 target.chmod(0o755 if entry.mode == "100755" else 0o644)
         # Raw blobs avoid smudge filters, checkout hooks, and external downloads.
         for target, destination in links:
@@ -187,7 +190,7 @@ class Snapshots:
     def registrations(self) -> set[Path]:
         output = self.repo.run("worktree", "list", "--porcelain", "-z").stdout
         return {
-            Path(os.fsdecode(field[len(b"worktree ") :])).resolve()
+            Path(os.fsdecode(field[len(b"worktree ") :])).absolute()
             for field in output.split(b"\0")
             if field.startswith(b"worktree ")
         }
@@ -196,11 +199,14 @@ class Snapshots:
         remaining = []
         for path in self.owned:
             try:
-                if path.resolve() in self.registrations():
+                if path.is_symlink():
+                    remaining.append(str(path))
+                    continue
+                if path in self.registrations():
                     self.repo.run("worktree", "remove", "--force", str(path))
                 elif path.exists():
                     shutil.rmtree(path)
-                if path.exists() or path.resolve() in self.registrations():
+                if path.exists() or path in self.registrations():
                     remaining.append(str(path))
             except (DVError, OSError):
                 remaining.append(str(path))

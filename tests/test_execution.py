@@ -73,6 +73,15 @@ class ExecutionReceiptTests(unittest.TestCase):
                 phase, log = self.report("pytest", source)
                 self.assertEqual(green_execution(phase, log, "pytest")[0], expected, log)
 
+    def test_malformed_count_record_fails_closed(self):
+        log = (
+            b'DV-RUNNER-PHASES {"runner": "unittest", '
+            b'"tests": ["executed", "passed", "failed", "skipped"]}\n'
+        )
+        counts, complete = receipt(log, "unittest")
+        self.assertFalse(complete)
+        self.assertEqual(counts["passed"], 0)
+
     def test_tap_truncation_cancellation_and_all_skip_fail(self):
         log = (
             b"TAP version 13\n# Subtest: value\nok 1 - value\n1..1\n"
@@ -84,6 +93,7 @@ class ExecutionReceiptTests(unittest.TestCase):
         for invalid in (
             log + log,
             log.replace(b"1..1", b"1..2"),
+            log.replace(b"ok 1 - value", b"not ok 1 - value"),
             log.replace(b"# cancelled 0", b"# cancelled 1"),
             log.replace(b"# pass 1", b"# pass 0").replace(b"# skipped 0", b"# skipped 1"),
             log.replace(b"# duration_ms 1.0\n", b""),

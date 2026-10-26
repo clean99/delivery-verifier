@@ -19,6 +19,8 @@ def receipt(content: bytes, runner: str) -> tuple[dict, bool]:
     try:
         record = json.loads(records[0])
         supplied = record["tests"]
+        if not isinstance(supplied, dict):
+            return counts, False
         if (
             record["runner"] != runner
             or set(supplied) != set(counts)
@@ -76,6 +78,13 @@ def tap_receipt(text: str) -> tuple[dict, bool]:
         and not re.search(r"^\s*Bail out!|^# (?:Warning|Error):", text, re.M)
         and len(re.findall(r"^# duration_ms [\d.]+$", text, re.M)) == 1
         and fields["cancelled"] == 0
+        and (
+            fields["fail"] > 0
+            or not any(
+                "# TODO" not in line and "# SKIP" not in line
+                for line in re.findall(r"^\s*not ok [^\n]+$", text, re.M)
+            )
+        )
     )
     counts.update(
         executed=fields["pass"] + fields["fail"] + fields["cancelled"],

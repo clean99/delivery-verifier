@@ -146,6 +146,34 @@ class SnapshotFaultTests(unittest.TestCase):
         self.assertIn("tests/helper.txt", output["retained_tests"])
         self.assertNotIn("tests/test_obsolete.py", output["retained_tests"])
 
+    def test_cleanup_refuses_replaced_worktree_symlink(self):
+        other = self.box.directory / "unrelated-worktree"
+        git(self.box.root, "worktree", "add", "--detach", str(other), self.box.base)
+        before = self.box.state()
+        directory = self.box.directory / "owned-attempt"
+        directory.mkdir()
+        owned = directory / "red"
+        owned.symlink_to(other, target_is_directory=True)
+        snapshots = Snapshots(LocalRepo(self.box.root), directory)
+        snapshots.owned.append(owned)
+        snapshots.save_recovery()
+        self.assertEqual(snapshots.cleanup(), [str(owned)])
+        self.assertTrue((other / ".git").exists())
+        self.assertEqual(self.box.state(), before)
+        self.assertTrue(snapshots.recovery.exists())
+
+    def test_materialization_never_overwrites_existing_admin_file(self):
+        from dv.snapshots import Entry
+
+        directory = self.box.directory / "owned-attempt"
+        directory.mkdir()
+        snapshots = Snapshots(LocalRepo(self.box.root), directory)
+        oid = git(self.box.root, "rev-parse", "HEAD:value.py")
+        with self.assertRaises(FileExistsError):
+            snapshots.create("red", self.box.base, {".git": Entry("100644", oid)})
+        self.assertTrue((directory / "red/.git").read_text().startswith("gitdir: "))
+        self.assertEqual(snapshots.cleanup(), [])
+
     def test_lfs_pointer_rejected_without_hydration(self):
         self.box.write(
             "asset.bin",
