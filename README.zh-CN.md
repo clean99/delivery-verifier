@@ -12,18 +12,23 @@
 
 ## 快速开始：一条命令验证回归
 
-**当前入口仅适用于候选源码。** 截至 2026-10-26，公开 `main` 位于 `aeec479965619bb5325cbccfcd7e94fb1e962ce8`，`dv prove` 仍在本地 `first-usable-version` 分支。公开可访问的候选提交或发布包仍是发布前置条件。下列命令需要这份候选源码，直接克隆公开 `main` 得到的是旧功能。
+准备带 `venv` 和 `pip` 的 Python 3.10–3.13、Git 2.38+ 及 Linux/macOS。部分 Linux 发行版需单独安装 venv 系统包，例如 `python3-venv`。
 
-拿到包含 `src/dv/prove.py` 的候选工作区后，从其根目录开始。准备带 `venv` 和 `pip` 的 Python 3.10–3.13、Git 2.38+ 及 Linux/macOS。部分 Linux 发行版需单独安装 venv 系统包，例如 `python3-venv`。构建需要 setuptools >=68，pip 通常会下载它；离线安装需提前准备构建依赖。以下命令使用虚拟环境：
+用 [pipx](https://pipx.pypa.io/latest/how-to/install-pipx.html) 安装 **GitHub Release v0.1.0 的 wheel**：
 
 ```sh
-python3 -m venv .venv
-. .venv/bin/activate
-python -m pip install .
+pipx install https://github.com/clean99/delivery-verifier/releases/download/v0.1.0/delivery_verifier-0.1.0-py3-none-any.whl
+pipx ensurepath
+```
+
+运行 `pipx ensurepath` 后打开新 shell，再检查安装结果：
+
+```sh
+dv --version
 dv prove --help
 ```
 
-激活环境后，`dv` 会加入当前 shell 的 `PATH`。切到自己的项目时保持环境激活；新开 shell 时重新激活同一环境。
+uv、Python 虚拟环境和 Git tag 的安装命令见[安装方式](#安装方式选择发布包或源码)。下列命令从 GitHub 获取发布包或源码。
 
 进入**自己的项目仓库**，在基于本地 `main` 的分支上提交修复和回归测试，然后运行：
 
@@ -44,7 +49,7 @@ dv prove --test "node --test --test-reporter=tap tests/words.test.cjs"
 
 **执行范围是已提交快照。** 暂存、未暂存、未跟踪和已忽略的本地文件留在原处，执行目录排除这些文件。配置读取已提交的 head。测试子进程会清除继承的 `GIT_*` 环境变量，让普通 Git 命令定位到执行 worktree，保留调用者的仓库和索引。每次尝试在 Git 管理目录的 `dv/proofs/` 下保存独立的 `proof.json`、`red.log` 和 `green.log`，命令结束后清理本次执行目录及缓存。CLI 会打印证据目录。失败和中断保留失败状态；遗留恢复记录需要按所列路径检查，避免全仓 worktree prune。
 
-**当前边界：** 0.1.0 正在开发，发布及安装验收仍待完成。支持 unittest、pytest 和 Node TAP；Jest/Vitest、原生 Windows、submodule/LFS 还原及自动安装依赖暂不支持。命令经 POSIX 参数切分后直接执行，shell 展开和管道需由调用者另行处理。依赖由用户准备；指向其他工作区的 editable install 会破坏源码隔离。Worktree 只隔离执行目录，**安全沙箱需另行准备**，命令仍拥有当前用户的文件和网络权限。日志保存在本机，可能包含敏感信息。证明通过说明所选测试区分了两份实现，完整覆盖和断言语义仍需人工判断。评审身份依赖如实声明。参见[可复跑手册](docs/handbook/green-tests.md)、[实现与验收状态](docs/design/first-usable-version.md)和[安全边界](SECURITY.md)。
+**当前边界：** 支持 unittest、pytest 和 Node TAP；Jest/Vitest、原生 Windows、submodule/LFS 还原及自动安装依赖暂不支持。命令经 POSIX 参数切分后直接执行，shell 展开和管道需由调用者另行处理。依赖由用户准备；指向其他工作区的 editable install 会破坏源码隔离。Worktree 只隔离执行目录，**安全沙箱需另行准备**，命令仍拥有当前用户的文件和网络权限。日志保存在本机，可能包含敏感信息。证明通过说明所选测试区分了两份实现，完整覆盖和断言语义仍需人工判断。评审身份依赖如实声明。参见[可复跑手册](docs/handbook/green-tests.md)、[实现与验收状态](docs/design/first-usable-version.md)和[安全边界](SECURITY.md)。
 
 源码离线示例仍可通过 `python3 examples/demo/run.py` 运行，演示独立的工作项交付流程，并使用模拟评审记录。
 
@@ -84,19 +89,46 @@ Meaningful regression proved: red=1, green=0.
 
 [pre-commit](https://github.com/pre-commit/pre-commit) 管理多语言 Git hook，可以运行检查，也可以接入自定义回归脚本。`dv` 提供约定好的 red/green 流程，并将证据记录绑定到提交及评审输入。已有 lint、测试和评审工具继续使用，评审者由你安排。
 
-## 安装：使用本地源码
+## 安装方式：选择发布包或源码
 
-上面的虚拟环境命令只依赖 Python 自带工具。若选择独立工具环境，请先按官方指引[安装 pipx 并配置 PATH](https://pipx.pypa.io/latest/how-to/install-pipx.html)，或[安装 uv](https://docs.astral.sh/uv/getting-started/installation/)。分别运行 `pipx ensurepath` 或 `uv tool update-shell` 后打开新 shell，让安装后的 `dv` 可从 PATH 找到。然后在候选源码目录执行：
+### uv：安装发布包
+
+按官方指引[安装 uv](https://docs.astral.sh/uv/getting-started/installation/)，再安装同一份 wheel：
 
 ```sh
-pipx install .
-# 或者：
-uv tool install .
-
-dv --help
+uv tool install https://github.com/clean99/delivery-verifier/releases/download/v0.1.0/delivery_verifier-0.1.0-py3-none-any.whl
+uv tool update-shell
 ```
 
-这两条命令安装当前源码目录。构建需要 setuptools；离线安装时，构建工具也需已在本地可用。安装后的运行时依赖是 Python 标准库和本地 Git。上面的示例可以直接运行，省去安装步骤。
+更新 PATH 后打开新 shell，运行 `dv --version`。
+
+### Python 虚拟环境：使用 pip
+
+这种方式只需 Python 自带的 `venv` 和 `pip`：
+
+```sh
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install https://github.com/clean99/delivery-verifier/releases/download/v0.1.0/delivery_verifier-0.1.0-py3-none-any.whl
+dv --version
+dv prove --help
+```
+
+激活环境后，`dv` 会加入当前 shell 的 `PATH`。切到自己的项目时保持环境激活；新开 shell 时重新激活同一环境。
+
+### Git tag：安装固定版本
+
+通过 v0.1.0 tag 安装对应源码：
+
+```sh
+pipx install "delivery-verifier @ git+https://github.com/clean99/delivery-verifier.git@v0.1.0"
+```
+
+Release 也提供源码归档 [`delivery_verifier-0.1.0.tar.gz`](https://github.com/clean99/delivery-verifier/releases/download/v0.1.0/delivery_verifier-0.1.0.tar.gz)。源码安装在构建时需要 setuptools >=68，安装器通常会下载它；离线安装需提前准备构建工具。Wheel 可直接安装。安装后的运行时依赖是 Python 标准库和本地 Git。
+
+### 本地源码：用于开发贡献
+
+在源码根目录运行 `pipx install .` 或 `uv tool install .`。Editable 开发环境的配置见[贡献指南](CONTRIBUTING.md#local-setup)。示例也可直接从源码运行。
 
 源码分发包包含示例、完整测试和引用文档。Wheel 将这些资源按源码目录结构安装到 `<environment>/share/delivery-verifier`。在可写环境中进入该目录，使用环境自身的 Python 执行 `python examples/demo/run.py` 或 `PYTHONPATH=src python -m unittest discover -s tests -v`。这些资源作为本地示例保留，避免占用顶层测试包名。
 

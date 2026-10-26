@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 — Unreleased
+## 0.1.0 — 2026-10-26
 
 ### Added
 
@@ -8,7 +8,7 @@
 - Positive green execution receipts for unittest, pytest and Node TAP; reject missing reports, all-skipped/expected-failure green, and abnormal execution.
 - Per-attempt local logs, input hashes and recovery records; retain test bytes/modes, reject tracked-input mutations, and clean only owned worktrees and caches without checkout hooks or smudge filters.
 - Explicit `--hygiene` and `--require-review` checks on the proof-only path; legacy delivery gates and hooks keep their existing requirements.
-- A pinned, Apache-2.0 synthetic handbook covering hollow tests, wrong-reason failures, missed execution and stale reviews, with a replay driver and packaged resources. Source replay passed 8/8 combinations at implementation `cf4dbf8`; release/install acceptance remains pending.
+- A pinned, Apache-2.0 synthetic handbook covering hollow tests, wrong-reason failures, missed execution and stale reviews, with a replay driver and packaged resources. Source replay passed 8/8 combinations at implementation `cf4dbf8`.
 
 - Local `dv` CLI for initializing work items, regression proof, hygiene checks, review records, readiness gates, and explicit human approval.
 - Red-to-green execution that retains regression tests, temporarily removes production changes, records both runs, and attempts worktree restoration on failures.
@@ -23,7 +23,7 @@
 - Clear inherited Git environment overrides in proof subprocesses so ordinary index operations affect only the execution worktree.
 - Exclude Node TAP file-only successes from green test-body counts; top-level absolute-path test names remain ambiguous and are conservatively excluded.
 - Resolve relative source import paths before handbook subprocesses change cwd; exercise the exact documented loop in regression tests.
-- Make the candidate-only installation prerequisite explicit, provide a venv/pip recipe, and document pipx/uv installation and PATH setup. Public candidate availability remains a release blocker.
+- Clarify installation prerequisites, provide a venv/pip recipe, and document pipx/uv installation and PATH setup. Add version-pinned GitHub Release and Git installation paths.
 
 - Preserve unittest subtest failure phases before Python 3.10 defers result callbacks; accept test-body assertions without accepting setup, teardown, cleanup, or runtime failures.
 - Require test-body phase evidence from the bundled Python runner probe; reject unittest setup, teardown and synchronous/asynchronous cleanup assertions, including when run through pytest. Uninstrumented Python wrappers now fail closed.

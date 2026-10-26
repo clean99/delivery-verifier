@@ -1,6 +1,6 @@
 # First usable version
 
-Status: implemented in development source, not released. Implementation: `cf4dbf82bc90dd96919435b0cf8f6cf529b81213` (`0.1.0.dev0`), plus the handbook and distribution-resource changes accompanying this document. Frozen baseline: `aeec479965619bb5325cbccfcd7e94fb1e962ce8`. Acceptance IDs A01–A21 remain executable in `tests/test_first_usable_spec.py` and `tests/test_first_usable_delivery_spec.py`; their assertions are unchanged and expected-failure markers have been removed. A21 and full release validation remain blocked; see the execution record below.
+Release version: `0.1.0`. The initial implementation was `cf4dbf82bc90dd96919435b0cf8f6cf529b81213` (`0.1.0.dev0`); the frozen baseline is `aeec479965619bb5325cbccfcd7e94fb1e962ce8`. Acceptance IDs A01–A21 remain executable in `tests/test_first_usable_spec.py` and `tests/test_first_usable_delivery_spec.py`; their assertions are unchanged and expected-failure markers have been removed. The installation section specifies v0.1.0 release paths and acceptance checks. The development execution record below preserves the earlier partial run and its disk-space constraint.
 
 ## Decision
 
@@ -56,17 +56,19 @@ The context digest binds immutable resolved refs, retained test bytes/modes, arg
 
 Keep the standard-library runtime, Python 3.10–3.13 and Linux/macOS with Git 2.38+. Keep the current setuptools backend and reproducible sdist normalization. Ship the handbook, its manifest, replay script, fixtures and tests in sdist and wheel resources under `share/delivery-verifier`; update both `MANIFEST.in` and setuptools data-file declarations during implementation.
 
-Build wheel and sdist from the candidate commit. A21 installs each into separate clean environments through `pip` and `pipx`, also exercises a Git VCS install, runs `dv --version` and a real proof from a cwd outside the source checkout with `PYTHONPATH` removed, and checks bundled resources. Development prerequisites are explicit: setuptools 80.9.0, pipx 1.7.1, pytest 8.4.2 and Ruff 0.17.1. Run the acceptance and existing suite on all four Python minor versions; missing runner prerequisites or skipped install checks do not satisfy release acceptance.
+Build wheel and sdist from the release commit. A21 installs each into separate clean environments through `pip` and `pipx`, also exercises a Git VCS install, runs `dv --version` and a real proof from a cwd outside the source checkout with `PYTHONPATH` removed, and checks bundled resources. Development prerequisites are explicit: setuptools 80.9.0, pipx 1.7.1, pytest 8.4.2 and Ruff 0.17.1. Run the acceptance and existing suite on all four Python minor versions; missing runner prerequisites or skipped install checks do not satisfy release acceptance.
 
-Document immutable install forms once release assets exist:
+Version-pinned v0.1.0 install paths:
 
 ```sh
-pipx install https://github.com/clean99/delivery-verifier/releases/download/<tag>/<wheel>
-python -m pip install https://github.com/clean99/delivery-verifier/releases/download/<tag>/<sdist>
-pipx install 'delivery-verifier @ git+https://github.com/clean99/delivery-verifier.git@<full-commit>'
+pipx install https://github.com/clean99/delivery-verifier/releases/download/v0.1.0/delivery_verifier-0.1.0-py3-none-any.whl
+uv tool install https://github.com/clean99/delivery-verifier/releases/download/v0.1.0/delivery_verifier-0.1.0-py3-none-any.whl
+# Inside an activated Python virtual environment:
+python -m pip install https://github.com/clean99/delivery-verifier/releases/download/v0.1.0/delivery_verifier-0.1.0.tar.gz
+pipx install "delivery-verifier @ git+https://github.com/clean99/delivery-verifier.git@v0.1.0"
 ```
 
-These are templates, not claims of an available release. Local acceptance uses file artifacts and `git+file`; a release rehearsal sets `DV_SPEC_WHEEL_URL`, `DV_SPEC_SDIST_URL` and `DV_SPEC_SOURCE_URL` to the immutable public URLs and repeats A21 read-only. Record results as passed/attempted cases with exact commit and tool versions. Local install success alone does not establish public asset availability. Prepare artifacts only; publishing, tagging and PyPI credentials are separate owner actions.
+Local acceptance uses file artifacts and `git+file`. After publication, a release rehearsal sets `DV_SPEC_WHEEL_URL`, `DV_SPEC_SDIST_URL` and `DV_SPEC_SOURCE_URL` to the version-pinned public URLs and repeats A21 read-only. Record results as passed/attempted cases with exact commit and tool versions. Verify downloaded assets against the release checksums; Git tags can be moved. Artifact preparation and validation are separate from publishing and tagging. These install paths use GitHub, not PyPI.
 
 ## Companion handbook
 
@@ -128,7 +130,7 @@ HUSKY=0 LEFTHOOK=0 UV_NO_CACHE=1 ruff check .
 
 All `@pending` markers have been removed without changing their assertions. A21 still requires `DV_SPEC_INSTALL=1`; a skipped installation check is not acceptance. CI now installs pipx 1.7.1 and enables A21 on Python 3.10–3.13. Build completion requires 21/21 accepted IDs, the existing regression suite, Ruff, the demo and the four-version installation matrix. Added fault-injection coverage exercises partial creation, removal failure, symlink-replaced cleanup targets, raw materialization collisions, tracked/index mutation, committed policy, test support/modes and filter/hook suppression. Existing process/runner regression cases remain required.
 
-## Execution record: 2026-10-26
+## Development execution record: 2026-10-26
 
 Source implementation `cf4dbf82bc90dd96919435b0cf8f6cf529b81213`; handbook/resources are the accompanying change. **A01–A20 passed on all four supported Python minors. A21 was skipped, so acceptance is 20/21, not 21/21.** No expected failures remain. The full existing unit suite, wheel/sdist build and clean installation matrix were not run because the required 5 GiB disk gate failed. No installed-artifact or release-readiness claim is made.
 
@@ -184,7 +186,7 @@ fi
 BLOCKED: full unit suite and build/install matrix require 5242880 KiB; available=3226124 KiB. No build or install was started.
 ```
 
-After sufficient disk space is available, rerun the complete suite and A21 on all four interpreters, build from the final candidate commit, and execute a bundled handbook case using a fresh artifact-installed CLI with `PYTHONPATH` removed. `DV_SPEC_INSTALL=1` includes six installer/source combinations per interpreter: pip and pipx, each with wheel, sdist and Git. Public immutable-URL rehearsal remains separate. Nothing was pushed, published or released.
+The remaining work at this development checkpoint was to rerun the complete suite and A21 on all four interpreters, build the final release artifacts, and execute a bundled handbook case using a fresh artifact-installed CLI with `PYTHONPATH` removed. `DV_SPEC_INSTALL=1` includes six installer/source combinations per interpreter: pip and pipx, each with wheel, sdist and Git. Public-URL rehearsal follows publication. This historical run performed no push, publication or release.
 
 ## Out of scope
 

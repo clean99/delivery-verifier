@@ -12,18 +12,23 @@ For people shipping changes written by coding agents. Runs locally with any agen
 
 ## Quick start
 
-**Candidate source only.** As of 2026-10-26, public `main` at `aeec479965619bb5325cbccfcd7e94fb1e962ce8` does not include `dv prove`. The candidate is on the local `first-usable-version` branch; a publicly accessible candidate commit or release artifact is still a release blocker. Cloning public `main` is not an installation path for the commands below.
+Requirements: Python 3.10–3.13 with `venv` and `pip`, Git 2.38+, Linux/macOS. Some Linux distributions package `venv` separately (for example, `python3-venv`).
 
-If you already have the candidate checkout containing `src/dv/prove.py`, start in its root. Requirements: Python 3.10–3.13 with `venv` and `pip`, Git 2.38+, Linux/macOS. Some Linux distributions package `venv` separately (for example, `python3-venv`). Installation needs setuptools >=68, normally downloaded by pip; offline use requires prepared build dependencies. No pipx installation is required:
+Install the **v0.1.0 GitHub Release wheel** with [pipx](https://pipx.pypa.io/latest/how-to/install-pipx.html):
 
 ```sh
-python3 -m venv .venv
-. .venv/bin/activate
-python -m pip install .
+pipx install https://github.com/clean99/delivery-verifier/releases/download/v0.1.0/delivery_verifier-0.1.0-py3-none-any.whl
+pipx ensurepath
+```
+
+Open a new shell after `pipx ensurepath`, then check the installed CLI:
+
+```sh
+dv --version
 dv prove --help
 ```
 
-Keep this environment activated when changing into your project; activation puts `dv` on `PATH`. In a new shell, activate the same environment again.
+For uv, a Python virtual environment, or installation from the Git tag, see [installation options](#installation-options). These recipes use GitHub assets or source, not PyPI.
 
 In **your project's repository**, with the fix and regression test committed on a branch based on local `main`, run:
 
@@ -44,7 +49,7 @@ Hygiene and review are opt-in: add `--hygiene` or `--require-review .dv/item.jso
 
 **Committed snapshots only.** Staged, unstaged, untracked and ignored caller files are excluded and left untouched. Policy comes from committed head. Test subprocesses discard inherited `GIT_*` overrides so ordinary Git commands discover the execution worktree rather than the caller's repository or index. Each attempt records `proof.json`, `red.log` and `green.log` under the Git administrative `dv/proofs/` directory and removes its execution worktrees and caches. The CLI prints the exact evidence directory. Failure and interruption never reuse a previous PASS; a leftover recovery record needs targeted inspection, not a global worktree prune.
 
-**Current limits:** 0.1.0 is in development; release/install acceptance is still pending. unittest, pytest and Node TAP are supported; Jest/Vitest, native Windows, submodule/LFS hydration, and automatic dependency installation are outside this version. Commands are POSIX-split argv, with no implicit shell expansion or pipelines. Prepare dependencies yourself; editable installs pointing to another checkout can defeat source isolation. Worktrees are **not a security sandbox**: commands retain your filesystem/network privileges. Logs remain local and can contain secrets. A passed proof establishes neither complete test coverage nor assertion correctness; reviewer identities are self-reported. See [the reproducible handbook](docs/handbook/green-tests.md), [implementation and validation status](docs/design/first-usable-version.md), and [security limits](SECURITY.md).
+**Current limits:** unittest, pytest and Node TAP are supported; Jest/Vitest, native Windows, submodule/LFS hydration, and automatic dependency installation are outside this version. Commands are POSIX-split argv, with no implicit shell expansion or pipelines. Prepare dependencies yourself; editable installs pointing to another checkout can defeat source isolation. Worktrees are **not a security sandbox**: commands retain your filesystem/network privileges. Logs remain local and can contain secrets. A passed proof establishes neither complete test coverage nor assertion correctness; reviewer identities are self-reported. See [the reproducible handbook](docs/handbook/green-tests.md), [implementation and validation status](docs/design/first-usable-version.md), and [security limits](SECURITY.md).
 
 For an offline source-only example, run `python3 examples/demo/run.py` from this checkout. It demonstrates the separate item-based delivery gate with synthetic review evidence.
 
@@ -84,19 +89,46 @@ The gate reruns your configured repository checks, flags issues such as focused 
 
 [pre-commit](https://github.com/pre-commit/pre-commit) manages multi-language Git hooks. You can use it to run checks, including a custom regression script. `dv` adds a prescribed red/green procedure and commit/input-bound evidence records. Keep your existing lint, test and review tools; `dv` neither replaces them nor supplies the reviewer.
 
-## Install from a local checkout
+## Installation options
 
-The virtual-environment recipe above needs no additional installer. If you prefer tool environments, first [install pipx and configure its PATH](https://pipx.pypa.io/latest/how-to/install-pipx.html) or [install uv](https://docs.astral.sh/uv/getting-started/installation/). Run `pipx ensurepath` or `uv tool update-shell` as appropriate and open a new shell before expecting `dv` on PATH. Then, from the candidate checkout:
+### uv
+
+After [installing uv](https://docs.astral.sh/uv/getting-started/installation/), install the same release wheel:
 
 ```sh
-pipx install .
-# Or:
-uv tool install .
-
-dv --help
+uv tool install https://github.com/clean99/delivery-verifier/releases/download/v0.1.0/delivery_verifier-0.1.0-py3-none-any.whl
+uv tool update-shell
 ```
 
-These commands install the local source, not a published package. Installation needs setuptools at build time; an offline install needs locally available build tooling. Once installed, `dv` uses Python's standard library and your local Git executable. The demo works directly from source without either installer.
+Open a new shell after updating PATH, then run `dv --version`.
+
+### Python virtual environment
+
+This option needs neither pipx nor uv:
+
+```sh
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install https://github.com/clean99/delivery-verifier/releases/download/v0.1.0/delivery_verifier-0.1.0-py3-none-any.whl
+dv --version
+dv prove --help
+```
+
+Keep this environment activated when changing into your project; activation puts `dv` on `PATH`. In a new shell, activate the same environment again.
+
+### Git tag
+
+Use the pinned v0.1.0 source tag instead of a moving branch:
+
+```sh
+pipx install "delivery-verifier @ git+https://github.com/clean99/delivery-verifier.git@v0.1.0"
+```
+
+The release also includes the source archive [`delivery_verifier-0.1.0.tar.gz`](https://github.com/clean99/delivery-verifier/releases/download/v0.1.0/delivery_verifier-0.1.0.tar.gz). Source installs need setuptools >=68 at build time, normally downloaded by the installer. Offline source installation needs locally available build tooling. The wheel needs no source build. Once installed, `dv` uses Python's standard library and your local Git executable.
+
+### From a local checkout (contributors)
+
+From the checkout root, install the local source with `pipx install .` or `uv tool install .`. For an editable development environment, see [Contributing](CONTRIBUTING.md#local-setup). The demo also works directly from source without installation.
 
 The source distribution includes the demo, complete tests, and referenced documentation. The wheel also installs these resources under `<environment>/share/delivery-verifier`, retaining the source layout. From that directory, run `python examples/demo/run.py` or `PYTHONPATH=src python -m unittest discover -s tests -v` in a writable environment; use the environment's Python. These resources are local examples, not installed top-level test packages.
 

@@ -6,7 +6,7 @@ A successful process exit is useful evidence, but it can describe a hollow asser
 
 Reference implementation: `cf4dbf82bc90dd96919435b0cf8f6cf529b81213`, version `0.1.0.dev0`. Reference toolchain: Python **3.12.13**, pytest **8.4.2**, Node **20.20.2**, Git 2.38+ on Linux/macOS. The cases use unittest; the pytest and Node pins also identify the supported-reporter reproduction environment. The driver records observed versions, not assumed pins.
 
-All fixtures in [examples/handbook/fixtures](../../examples/handbook/fixtures) are repository-owned synthetic examples under Apache-2.0. No historical/private incidents or third-party patches are used. [cases.json](cases.json) pins the inputs, expected observations and comparison sources. This is a development-source replay, not a claim that release artifacts are publicly available.
+All fixtures in [examples/handbook/fixtures](../../examples/handbook/fixtures) are repository-owned synthetic examples under Apache-2.0. No historical/private incidents or third-party patches are used. [cases.json](cases.json) pins the inputs, expected observations and comparison sources. The historical results below use the pinned development source. For v0.1.0 installation, use the [GitHub Release or Git tag recipes](../../README.md#installation-options); the release bundles this handbook and its replay resources.
 
 With the reference tooling already prepared, run from this checkout:
 
