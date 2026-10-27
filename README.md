@@ -110,20 +110,25 @@ Red exited 1 with `AssertionError: Lists differ: ['red', '', '', 'green'] != ['r
 
 **Attempted, currently blocked.** [Phoenix #17270](https://github.com/Arize-ai/phoenix/pull/17270), authored by clean99 and merged on 2026-10-26, preserves `extra_body` when converting a saved prompt to SDK arguments. Its pytest regression method covers metadata, sampling overrides and empty values. We chose it because pytest is supported.
 
-With the v0.3.0 release wheel, the command below exited **2 before either phase ran**:
+A rerun on 2026-10-27 installed dv from the **0.3.1 development checkout** at `f1aa32811bcee8f27c3035cd44c797e684a2478e`, rather than a release wheel. Both phases ran, but `dv prove` exited **1**. Actual output excerpts:
 
 ```text
 prove: FAIL
-[FAIL] proof: Retained tests must be regular files, not symlinks
+[PASS] red assertion: pytest: red failed at assertions with no runner errors
+[FAIL] green execution: pytest: complete=False, tests={'executed': 6, 'passed': 6, 'failed': 0, 'skipped': 0}; requires a normal exit 0 and at least one passed test body, with no errors
   Next: Correct the finding and rerun this check.
 ```
 
-The pinned repository contains a tracked symlink at `js/packages/phoenix-cli/test/fixtures/llms.txt`. dv retains test/support files across the repository, including files outside the selected Python test, and currently requires them to be regular files. The standalone pytest command passed all six cases at the merge commit; that is a head-only test run, not a dv proof. The successful demonstration above is therefore explicitly synthetic.
+On parent `abbfa7bd`, the retained test failed at `assert kwargs.get("extra_body") == expected_extra_body`: the old code drops stored `extra_body`, losing metadata and sampling overrides. Red exited 1 with **3 failed and 3 passed**. On merge commit `deb0731a`, green exited 0 with **6 passed**. Each phase also reported **2 warnings** about unused asyncio settings.
+
+The green log ends with `6 passed, 2 warnings in 1.06s`, and the phase probe reports `complete: true`. dv's pytest summary parser does not accept the warning count, so it records `complete=False` and rejects the proof. This remains a blocked dv demonstration, despite the passing green tests.
+
+The v0.3.0 wheel previously stopped before either phase on the tracked symlink `js/packages/phoenix-cli/test/fixtures/llms.txt`. The development checkout clears that blocker with its symlink validation enabled. No upstream files were edited; the successful demonstration above remains explicitly synthetic.
 
 <details>
 <summary>Reproduce the upstream attempt</summary>
 
-Replace `<clone>` and `<venv>` with separate new directories. This pins the merge commit and its parent. Install only the Python client and the selected test module's dependencies; the Phoenix server and JavaScript workspace are not needed. The recorded run used Python 3.12.13 and `uv pip install --python "<venv>/bin/python"` for the same packages shown below.
+Replace `<clone>` and `<venv>` with separate new directories, and `<checkout>` with a dv checkout at `f1aa32811bcee8f27c3035cd44c797e684a2478e` (`fix/unchanged-test-symlinks`). This pins the Phoenix merge commit and its parent. Install only the Python client and the selected test module's dependencies; the Phoenix server and JavaScript workspace are not needed. The recorded run used Python 3.12.13 on macOS and the pip command below in a fresh virtual environment.
 
 ```sh
 git clone --no-checkout --depth 1 https://github.com/Arize-ai/phoenix.git "<clone>"
@@ -133,7 +138,7 @@ git -C "<clone>" checkout --detach deb0731a4606b77c786d86953301ecca39916829
 python3.12 -m venv "<venv>"
 . "<venv>/bin/activate"
 python -m pip install --index-url https://pypi.org/simple \
-  https://github.com/clean99/delivery-verifier/releases/download/v0.3.0/delivery_verifier-0.3.0-py3-none-any.whl \
+  "<checkout>" \
   "<clone>/packages/phoenix-client" pytest==8.4.2 deepdiff==8.6.2 Faker==33.3.1
 cd "<clone>"
 unset PYTHONPATH
@@ -144,7 +149,7 @@ dv prove \
   --test "python -m pytest -c packages/phoenix-client/pyproject.toml -o pythonpath=src --tb=long packages/phoenix-client/tests/canary/sdk/anthropic/test_messages.py::TestToChatMessagesAndKwargs::test_extra_body_is_preserved"
 ```
 
-`-c` selects the client configuration; `-o pythonpath=src` imports from each execution snapshot rather than the installed client copy. Plugin autoload is disabled because this conversion test needs no service or provider calls. Running the inner pytest command directly at head passed **6 tests**, with **2 warnings** for unused asyncio settings. No upstream files were edited to bypass dv's symlink check.
+`-c` selects the client configuration; `-o pythonpath=src` imports from each execution snapshot rather than the installed client copy. Plugin autoload is disabled because this conversion test needs no service or provider calls. The resulting asyncio configuration warnings remain in the logs. The evidence directory printed by dv contains `proof.json`, `red.log` and `green.log`, including the rejected green receipt.
 
 The other supplied candidates do not fit the current runner contract: Phoenix [#17253](https://github.com/Arize-ai/phoenix/pull/17253) / [#17246](https://github.com/Arize-ai/phoenix/pull/17246) and assistant-ui [#10111](https://github.com/assistant-ui/assistant-ui/pull/10111) declare Vitest 5; React Hook Form [#13950](https://github.com/react-hook-form/react-hook-form/pull/13950) uses Jest. These were configuration checks, not successful dv runs. The upstream clone retains its own license and notices; no upstream source is copied here.
 

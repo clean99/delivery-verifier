@@ -110,20 +110,25 @@ Red 退出码为 1，断言报错为 `AssertionError: Lists differ: ['red', '', 
 
 **已试跑，当前受阻。** [Phoenix #17270](https://github.com/Arize-ai/phoenix/pull/17270) 由 clean99 提交，2026-10-26 合入，修复保存的 prompt 转成 SDK 参数时丢失 `extra_body` 的问题。新增 pytest 方法覆盖 metadata、采样参数覆盖和空值处理。选择它的原因是 dv 已支持 pytest。
 
-使用 v0.3.0 发布 wheel 执行下方命令，**在两个阶段执行前退出，退出码为 2**：
+2026-10-27 使用 **0.3.1 开发源码** `f1aa32811bcee8f27c3035cd44c797e684a2478e` 重新安装并试跑。两个阶段均已执行，`dv prove` **退出码为 1**。实际输出节选：
 
 ```text
 prove: FAIL
-[FAIL] proof: Retained tests must be regular files, not symlinks
+[PASS] red assertion: pytest: red failed at assertions with no runner errors
+[FAIL] green execution: pytest: complete=False, tests={'executed': 6, 'passed': 6, 'failed': 0, 'skipped': 0}; requires a normal exit 0 and at least one passed test body, with no errors
   Next: Correct the finding and rerun this check.
 ```
 
-固定版本中，`js/packages/phoenix-cli/test/fixtures/llms.txt` 是已跟踪的符号链接。dv 会保留整个仓库的测试及辅助文件，范围包含本次 Python 测试之外的文件，目前要求这些文件为普通文件。单独运行 pytest 时，合并提交上的六个用例全部通过；这份结果只覆盖 head。上方成功演示因此明确采用合成示例。
+在父提交 `abbfa7bd` 上，保留的测试在 `assert kwargs.get("extra_body") == expected_extra_body` 处失败：旧代码丢弃保存的 `extra_body`，使 metadata 和采样参数覆盖丢失。Red 退出码为 1，**3 个失败、3 个通过**。在合并提交 `deb0731a` 上，green 退出码为 0，**6 个通过**。两个阶段各有 **2 条警告**，来自未使用的 asyncio 配置。
+
+Green 日志以 `6 passed, 2 warnings in 1.06s` 结束，阶段探针也报告 `complete: true`。dv 的 pytest 汇总解析器尚未接受警告计数，因此记录 `complete=False` 并拒绝这次证明。Green 测试已通过，dv 证明仍受阻。
+
+此前 v0.3.0 wheel 在执行前被已跟踪的符号链接 `js/packages/phoenix-cli/test/fixtures/llms.txt` 阻断。开发源码已消除这一阻塞，符号链接校验保持启用，上游文件保持原样。上方成功演示仍采用合成示例。
 
 <details>
 <summary>复现这次上游试跑</summary>
 
-将 `<clone>` 和 `<venv>` 替换为两个独立的新目录。命令固定合并提交及其父提交，只安装 Python 客户端和所选测试模块的依赖，省去 Phoenix 服务端和 JavaScript workspace。实测使用 Python 3.12.13，并通过 `uv pip install --python "<venv>/bin/python"` 安装下列同一组包。
+将 `<clone>` 和 `<venv>` 替换为两个独立的新目录，`<checkout>` 替换为 dv 源码目录，版本固定在 `fix/unchanged-test-symlinks` 分支的 `f1aa32811bcee8f27c3035cd44c797e684a2478e`。命令固定 Phoenix 合并提交及其父提交，只安装 Python 客户端和所选测试模块的依赖，省去 Phoenix 服务端和 JavaScript workspace。实测在 macOS 上使用 Python 3.12.13，按下方 pip 命令安装到全新虚拟环境。
 
 ```sh
 git clone --no-checkout --depth 1 https://github.com/Arize-ai/phoenix.git "<clone>"
@@ -133,7 +138,7 @@ git -C "<clone>" checkout --detach deb0731a4606b77c786d86953301ecca39916829
 python3.12 -m venv "<venv>"
 . "<venv>/bin/activate"
 python -m pip install --index-url https://pypi.org/simple \
-  https://github.com/clean99/delivery-verifier/releases/download/v0.3.0/delivery_verifier-0.3.0-py3-none-any.whl \
+  "<checkout>" \
   "<clone>/packages/phoenix-client" pytest==8.4.2 deepdiff==8.6.2 Faker==33.3.1
 cd "<clone>"
 unset PYTHONPATH
@@ -144,7 +149,7 @@ dv prove \
   --test "python -m pytest -c packages/phoenix-client/pyproject.toml -o pythonpath=src --tb=long packages/phoenix-client/tests/canary/sdk/anthropic/test_messages.py::TestToChatMessagesAndKwargs::test_extra_body_is_preserved"
 ```
 
-`-c` 选择客户端配置，`-o pythonpath=src` 让测试从各阶段快照导入源码。该转换测试无需服务或模型请求，因此关闭插件自动加载。在 head 单独执行内层 pytest 命令得到 **6 个测试通过**，另有 **2 条警告**来自未使用的 asyncio 配置。上游文件保持原样，符号链接检查也保持启用。
+`-c` 选择客户端配置，`-o pythonpath=src` 让测试从各阶段快照导入源码。该转换测试无需服务或模型请求，因此关闭插件自动加载，相应的 asyncio 配置警告保留在日志中。dv 打印的证据目录包含 `proof.json`、`red.log` 和 `green.log`，其中保留了未获接受的 green 执行记录。
 
 其余候选的运行器超出当前支持范围：Phoenix [#17253](https://github.com/Arize-ai/phoenix/pull/17253)／[#17246](https://github.com/Arize-ai/phoenix/pull/17246) 和 assistant-ui [#10111](https://github.com/assistant-ui/assistant-ui/pull/10111) 声明使用 Vitest 5；React Hook Form [#13950](https://github.com/react-hook-form/react-hook-form/pull/13950) 使用 Jest。这些结论来自配置检查。上游克隆保留其许可证和声明，本仓库仅提供复现命令。
 
