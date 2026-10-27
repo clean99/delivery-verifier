@@ -157,6 +157,8 @@ def run_test(
     command: list[str], cwd: Path, log: Path, timeout: int, env: dict[str, str],
     declared: str = "auto",
 ) -> dict:
+    if runner_for(command, declared) == "pytest":
+        return run_pytest(command, cwd, log, timeout, env, declared)
     argv = instrument(command, env, declared)
     if runner_for(command, declared) != "vitest":
         return process.run(argv, cwd, log, timeout, env=env)
@@ -195,17 +197,58 @@ def run_test(
         return phase
 
 
-def body_assertions(text: str, runner: str, failures: int) -> bool:
+def run_pytest(command: list[str], cwd: Path, log: Path, timeout: int,
+               env: dict[str, str], declared: str) -> dict:
+    with tempfile.TemporaryDirectory(prefix="dv-pytest-probe-") as directory:
+        report = Path(directory).resolve() / "report.json"
+        if report.is_relative_to(cwd.resolve()):
+            raise DVError("Pytest probe temporary directory must be outside the execution checkout")
+        nonce = uuid.uuid4().hex
+        env = {**env, "DV_PYTEST_REPORT": str(report), "DV_PYTEST_NONCE": nonce}
+        phase = process.run(instrument(command, env, declared), cwd, log, timeout, env=env)
+        try:
+            if report.is_symlink() or not report.is_file():
+                raise ValueError("missing or nonregular report")
+            record = json.loads(report.read_bytes())
+            if not isinstance(record, dict) or record.get("nonce") != nonce:
+                raise ValueError("report nonce mismatch")
+            if record.get("exit_code") != phase["exit_code"]:
+                raise ValueError("report exit status mismatch")
+        except (OSError, ValueError):
+            record = None
+        encoded = json.dumps(record).encode()
+        # Bind only the out-of-band report, never a record printed by a test.
+        phase["runner_report_sha256"] = digest(encoded) if record is not None else None
+        with log.open("ab") as stream:
+            stream.write(b"\nDV-RUNNER-PHASES " + encoded + b"\n")
+        phase["log_sha256"] = digest(log.read_bytes())
+        return phase
+
+
+def phase_record(text: str, runner: str, phase: dict | None = None) -> dict | None:
     records = re.findall(r"^DV-RUNNER-PHASES (.+)$", text, re.M)
     if len(records) != 1:
-        return False
+        return None
+    if runner == "pytest" and (
+        phase is None or phase.get("runner_report_sha256") != digest(records[0].encode())
+    ):
+        return None
     try:
         record = json.loads(records[0])
     except ValueError:
-        return False
+        return None
+    if not isinstance(record, dict) or record.get("runner") != runner:
+        return None
+    if runner == "pytest" and record.get("exit_code") != phase.get("exit_code"):
+        return None
+    return record
+
+
+def body_assertions(text: str, runner: str, failures: int, phase: dict | None = None) -> bool:
+    record = phase_record(text, runner, phase)
     return (
-        isinstance(record, dict)
-        and record.get("runner") == runner
+        record is not None
+        and (runner != "pytest" or record.get("complete") is True)
         and isinstance(record.get("body_assertions"), list)
         and len(record["body_assertions"]) == failures
         and all(value is True for value in record["body_assertions"])
@@ -233,7 +276,7 @@ def unittest_assertions(text: str) -> bool:
     )
 
 
-def pytest_assertions(text: str) -> bool:
+def pytest_assertions(text: str, phase: dict | None = None) -> bool:
     if re.search(r"^=+ ERRORS =+|^ERROR |\b[1-9]\d* errors?\b", text, re.M):
         return False
     summaries = re.findall(r"^(?:=+ )?(\d+) failed(?:, [^\n]+)? in [^\n]+$", text, re.M)
@@ -243,7 +286,8 @@ def pytest_assertions(text: str) -> bool:
     failures = int(summaries[0])
     body = re.split(r"^=+ short test summary info =+", sections[1], flags=re.M)[0]
     blocks = re.split(r"^_+ [^\n]+ _+\n", body, flags=re.M)[1:]
-    if len(blocks) != failures or not failures or not body_assertions(text, "pytest", failures):
+    if (len(blocks) != failures or not failures
+            or not body_assertions(text, "pytest", failures, phase)):
         return False
     for block in blocks:
         terminal = re.findall(r"^\S.*:\d+: (\w+)\s*$", block, re.M)
@@ -302,7 +346,7 @@ def red_assertion(phase: dict, content: bytes, runner: str) -> tuple[bool, str]:
         return complete and asserted, detail
     validators = {
         "unittest": unittest_assertions,
-        "pytest": pytest_assertions,
+        "pytest": lambda text: pytest_assertions(text, phase),
         "node-test": node_assertions,
     }
     if runner not in validators:

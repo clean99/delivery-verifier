@@ -2,26 +2,26 @@
 
 from __future__ import annotations
 
-import json
 import re
 
-from dv.runners import ANSI
+from dv.runners import ANSI, phase_record
 from dv.vitest import parse_report
 
 
-def receipt(content: bytes, runner: str) -> tuple[dict, bool]:
+def receipt(content: bytes, runner: str, phase: dict | None = None) -> tuple[dict, bool]:
     counts = {"executed": 0, "passed": 0, "failed": 0, "skipped": 0}
+    if runner == "pytest":
+        counts.update(xpassed=0, xfailed=0, errors=0)
     text = ANSI.sub("", content.decode("utf-8", errors="replace"))
     if runner == "vitest":
         counts, complete, _, _ = parse_report(text)
         return counts, complete
     if runner == "node-test":
         return tap_receipt(text)
-    records = re.findall(r"^DV-RUNNER-PHASES (.+)$", text, re.M)
-    if len(records) != 1:
+    record = phase_record(text, runner, phase)
+    if record is None:
         return counts, False
     try:
-        record = json.loads(records[0])
         supplied = record["tests"]
         if not isinstance(supplied, dict):
             return counts, False
@@ -44,21 +44,7 @@ def receipt(content: bytes, runner: str) -> tuple[dict, bool]:
             and len(endings) == 1
             and int(summaries[0]) == counts["executed"] + counts["skipped"]
         )
-    elif runner == "pytest":
-        summaries = re.findall(
-            r"^(?:=+ )?((?:\d+ (?:passed|failed|skipped|deselected|xfailed|xpassed|errors?"
-            r"|warnings?)(?:, )?)+) in [^\n]+$",
-            text,
-            re.M,
-        )
-        complete &= len(summaries) == 1
-        if len(summaries) == 1:
-            reported = dict(
-                (label, int(n)) for n, label in re.findall(r"(\d+) (\w+)", summaries[0])
-            )
-            complete &= reported.get("passed", 0) == counts["passed"]
-            complete &= not reported.get("xpassed", 0)
-    else:
+    elif runner != "pytest":
         complete = False
     return counts, bool(complete)
 
@@ -113,7 +99,7 @@ def tap_receipt(text: str) -> tuple[dict, bool]:
 
 
 def green_execution(phase: dict, content: bytes, runner: str) -> tuple[bool, str]:
-    counts, complete = receipt(content, runner)
+    counts, complete = receipt(content, runner, phase)
     valid = (
         phase.get("status") == "normal"
         and phase.get("exit_code") == 0
@@ -121,6 +107,8 @@ def green_execution(phase: dict, content: bytes, runner: str) -> tuple[bool, str
         and counts["executed"] > 0
         and counts["passed"] > 0
         and counts["failed"] == 0
+        and counts.get("xpassed", 0) == 0
+        and counts.get("errors", 0) == 0
     )
     if runner == "vitest" and not valid:
         _, _, _, detail = parse_report(content.decode("utf-8", errors="replace"))

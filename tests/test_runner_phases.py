@@ -13,7 +13,7 @@ from pathlib import Path
 from support import Sandbox
 
 from dv import evidence, redgreen
-from dv.runners import instrument, red_assertion
+from dv.runners import red_assertion, run_test
 
 HAS_PYTEST = importlib.util.find_spec("pytest") is not None
 
@@ -33,21 +33,26 @@ class RunnerPhaseTests(unittest.TestCase):
                 "PYTHONDONTWRITEBYTECODE": "1",
             }
             if probed:
-                command = instrument(command, env)
-            proc = subprocess.run(
-                command,
-                cwd=directory,
-                env=env,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                timeout=30,
-            )
-        self.assertEqual(proc.returncode, 1, proc.stdout.decode())
-        return proc.stdout
+                log = Path(directory, "run.log")
+                phase = run_test(command, Path(directory), log, 30, env)
+                content = log.read_bytes()
+            else:
+                proc = subprocess.run(
+                    command,
+                    cwd=directory,
+                    env=env,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    timeout=30,
+                )
+                phase = {"status": "normal", "exit_code": proc.returncode}
+                content = proc.stdout
+        self.assertEqual(phase["exit_code"], 1, content.decode())
+        return phase, content
 
     def assert_report(self, runner, source, expected, **kwargs):
-        content = self.run_report(runner, source, **kwargs)
-        valid, detail = red_assertion({"status": "normal", "exit_code": 1}, content, runner)
+        phase, content = self.run_report(runner, source, **kwargs)
+        valid, detail = red_assertion(phase, content, runner)
         self.assertEqual(valid, expected, detail + "\n" + content.decode())
         return content
 

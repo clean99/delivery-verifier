@@ -131,14 +131,27 @@ _pytest_failures: list[bool] = []
 _pytest_calls: dict[tuple[str, str], bool] = {}
 _pytest_reports: dict[str, dict] = {}
 _pytest_duplicate = False
+_pytest_collection: list[str] = []
+_pytest_errors = 0
 
 
 def pytest_sessionstart(session):
-    global _pytest_duplicate
+    global _pytest_duplicate, _pytest_errors
     _pytest_failures.clear()
     _pytest_calls.clear()
     _pytest_reports.clear()
+    _pytest_collection.clear()
     _pytest_duplicate = False
+    _pytest_errors = 0
+
+
+def pytest_collectreport(report):
+    _pytest_collection.append(report.outcome)
+
+
+def pytest_internalerror(excrepr, excinfo):
+    global _pytest_errors
+    _pytest_errors += 1
 
 
 def pytest_runtest_makereport(item, call):
@@ -156,30 +169,59 @@ def pytest_runtest_logreport(report):
         _pytest_failures.append(valid)
     phases = _pytest_reports.setdefault(report.nodeid, {})
     _pytest_duplicate |= report.when in phases
-    phases[report.when] = (report.outcome, hasattr(report, "wasxfail"))
+    # Strict XPASS is a failed report without wasxfail in pytest 8.4.2.
+    strict_xpass = (
+        report.when == "call" and report.failed and isinstance(report.longrepr, str)
+        and report.longrepr.startswith("[XPASS(strict)] ")
+    )
+    phases[report.when] = (report.outcome, hasattr(report, "wasxfail"), strict_xpass)
 
 
 def pytest_sessionfinish(session, exitstatus):
     execution = empty_execution()
     counts = execution["tests"]
-    complete = not _pytest_duplicate and int(exitstatus) in (0, 1)
+    counts.update(xpassed=0, xfailed=0, errors=_pytest_errors + _pytest_collection.count("failed"))
+    counts["skipped"] = _pytest_collection.count("skipped")
+    outcomes = {"passed", "failed", "skipped"}
+    complete = (
+        not _pytest_duplicate and int(exitstatus) in (0, 1)
+        and all(outcome in outcomes for outcome in _pytest_collection)
+    )
+    if int(exitstatus) == 0:
+        complete &= len(_pytest_reports) == session.testscollected
     for phases in _pytest_reports.values():
-        complete &= "setup" in phases and "teardown" in phases
+        complete &= {"setup", "teardown"} <= phases.keys() <= {"setup", "call", "teardown"}
+        complete &= phases.get("setup") != ("passed", False, False) or "call" in phases
         values = list(phases.values())
-        failed = any(outcome == "failed" for outcome, _ in values)
-        skipped = any(outcome == "skipped" or xfail for outcome, xfail in values)
+        complete &= all(outcome in outcomes for outcome, _, _ in values)
+        failed = any(outcome == "failed" for outcome, _, _ in values)
+        skipped = any(outcome == "skipped" for outcome, _, _ in values)
+        xpassed = any(strict or (outcome == "passed" and xfail)
+                      for outcome, xfail, strict in values)
+        counts["xpassed"] += int(xpassed)
+        counts["xfailed"] += int(any(outcome == "skipped" and xfail
+                                     for outcome, xfail, _ in values))
+        counts["errors"] += sum(outcome == "failed" for when, (outcome, _, _) in phases.items()
+                                if when != "call")
         passed = (
-            not failed
-            and not skipped
-            and phases.get("call") == ("passed", False)
-            and phases.get("teardown") == ("passed", False)
+            not failed and not skipped and not xpassed
+            and phases.get("call") == ("passed", False, False)
+            and phases.get("teardown") == ("passed", False, False)
         )
         counts["failed"] += int(failed)
         counts["skipped"] += int(skipped and not failed)
         counts["passed"] += int(passed)
         counts["executed"] += int("call" in phases and not skipped)
     execution["complete"] = bool(complete)
-    emit("pytest", _pytest_failures, execution)
+    report = os.environ.get("DV_PYTEST_REPORT")
+    if report:
+        record = {
+            "runner": "pytest", "body_assertions": _pytest_failures, **execution,
+            "nonce": os.environ.get("DV_PYTEST_NONCE"), "exit_code": int(exitstatus),
+        }
+        # Stdout is test-controlled. Only the parent may put evidence in the log.
+        with open(report, "x", encoding="utf-8") as stream:
+            json.dump(record, stream)
 
 
 if __name__ == "__main__":

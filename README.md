@@ -258,6 +258,8 @@ dv init --implementer model-a --base main
 
 `test_runner` defaults to `auto`, detecting direct `python -m unittest`, `python -m pytest` / `pytest`, and `node --test` commands for the item workflow. **Vitest is supported only through `dv prove`**, which detects `vitest`, `npx vitest`, `pnpm vitest` and `pnpm exec vitest`. Item-based `redgreen` and its evidence gate reject Vitest with guidance to use `dv prove`. Both phases use the same recipe. For direct Python commands, `dv` adds its bundled phase probe: a unittest launcher or a pytest plugin, using the selected interpreter and installed runner. The probe adds a `DV-RUNNER-PHASES` record to the log without new runtime dependencies. Red must exit 1 and produce a complete assertion-only report:
 
+Pytest green validation uses the probe's report objects, not terminal summaries. It accepts passing runs with warnings, including `-qq` and `-p no:terminal`, while requiring zero XPASS and errors. The probe writes a per-run report outside the checkout; `dv` validates it and binds the logged record to the phase. Printed phase records fail closed. Red still requires the tracebacks and summary below.
+
 | Runner | Required red output |
 | --- | --- |
 | Python unittest | `FAILED (failures=N)` with positive failures, no errors, and `AssertionError` in every failure traceback. The phase probe must establish test-method execution for every failure; `setUp`, `tearDown`, `addCleanup` and `addAsyncCleanup` failures are rejected. |

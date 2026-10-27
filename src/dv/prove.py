@@ -178,7 +178,7 @@ def run(
                 try:
                     executed = run_test(phase_command, worktree.root, log, timeout, env)
                     executed["tests"], executed["report_complete"] = receipt(
-                        log.read_bytes(), runner
+                        log.read_bytes(), runner, executed
                     )
                     output[phase] = executed
                     if runner == "vitest":
