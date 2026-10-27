@@ -387,7 +387,9 @@ allow_commands = []
 
 - Write fixes or tests, call models, judge a review's quality, authenticate reviewers, or decide approval for you.
 - Discover repositories, research contribution policies, manage issues or PRs, fetch remotes, push, publish, deploy, poll CI, or maintain a contribution ledger.
-- Sandbox configured commands, scan all secrets, cryptographically sign evidence, or guarantee that a test failed for the intended reason.
+- Sandbox configured commands, scan all secrets, cryptographically sign evidence, or judge whether an assertion tests the intended behavior.
+
+`dv` is not a security sandbox. It must not report a false PASS for hollow tests, wrong-reason failures, tests that never ran, skips, XPASS, errors, or results misreported through ordinary test output, `conftest` hooks or the process exit path. Deliberate in-process tampering with `dv`'s own probe objects or private pipe is outside this threat model.
 
 Internal Git commands disable lazy fetching and all transport protocols. Missing objects fail locally; prepare them yourself before retrying. Partial clones require Git with `--no-lazy-fetch` support, otherwise use a complete local clone.
 
