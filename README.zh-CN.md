@@ -8,7 +8,7 @@
 dv prove --test "<command>"
 ```
 
-直接传入 unittest、pytest、node:test（TAP）或 Vitest **3.2.x** 命令。
+直接传入 unittest、pytest、node:test（TAP）或 Vitest **3.2.x 或精确版本 4.1.12** 命令。
 
 **GitHub Action 摘要**：由 Action 适配器在本地读取[下方合成示例](#合成示例验证连续空格)的证明结果生成，托管 CI 运行另行验证。
 
@@ -228,7 +228,7 @@ Linux/macOS 上沿用现有运行器契约和证明范围。Worktree 只隔离�
 
 **执行范围是已提交快照。** 暂存、未暂存、未跟踪和已忽略的本地源码留在原处，执行目录只取已提交源码。Node TAP 和 Vitest 证明会把已安装的 Node 依赖复制到每阶段的独立副本；Python 证明保持原有依赖处理方式。验证策略（policy）读取已提交的 head。测试子进程会清除继承的 `GIT_*` 环境变量，让普通 Git 命令定位到执行 worktree，保留调用者的仓库和索引。执行 worktree 位于调用者仓库及其 `.git` 目录之外。每次尝试在 Git 管理目录的 `dv/proofs/` 下保存独立的 `proof.json`、`red.log` 和 `green.log`，命令结束后清理本次执行目录及缓存。CLI 会打印证据目录。失败和中断保留失败状态；遗留恢复记录需要按所列路径检查，避免全仓 worktree prune。
 
-**当前边界：** 支持 unittest、pytest、Node TAP 和 Vitest 3.2.x；Jest、原生 Windows、submodule/LFS 还原及自动安装依赖暂不支持。Vitest 限用默认 runner 和 forks/threads pool，排除浏览器模式、自定义 runner/pool、全局 setup/teardown 和扩展测试 fixture。命令经 POSIX 参数切分后直接执行，shell 展开和管道需由调用者另行处理。依赖由用户准备；指向其他工作区的 editable install 会破坏源码隔离。Worktree 只隔离执行目录，**安全沙箱需另行准备**，命令仍拥有当前用户的文件和网络权限。日志保存在本机，可能包含敏感信息。证明通过说明所选测试区分了两份实现，完整覆盖和断言语义仍需人工判断。评审身份依赖如实声明。参见[可复跑手册](docs/handbook/green-tests.md)、[实现与验收状态](docs/design/first-usable-version.md)和[安全边界](SECURITY.md)。
+**当前边界：** 支持 unittest、pytest、Node TAP 和 Vitest 3.2.x、4.1.12；Jest、原生 Windows、submodule/LFS 还原及自动安装依赖暂不支持。Vitest 限用默认 runner 和 forks/threads pool，排除浏览器模式、自定义 runner/pool、全局 setup/teardown。扩展 fixture 在 3.2.x 中继续排除；4.1.12 支持正常完成的 test/file/worker fixture。命令经 POSIX 参数切分后直接执行，shell 展开和管道需由调用者另行处理。依赖由用户准备；指向其他工作区的 editable install 会破坏源码隔离。Worktree 只隔离执行目录，**安全沙箱需另行准备**，命令仍拥有当前用户的文件和网络权限。日志保存在本机，可能包含敏感信息。证明通过说明所选测试区分了两份实现，完整覆盖和断言语义仍需人工判断。评审身份依赖如实声明。参见[可复跑手册](docs/handbook/green-tests.md)、[实现与验收状态](docs/design/first-usable-version.md)和[安全边界](SECURITY.md)。
 
 依赖优先使用 APFS clone 或 Linux reflink；不支持时先检查空间再完整复制，大型依赖树会更慢。
 
@@ -243,9 +243,11 @@ Pytest 的 green 判定以探针读取的报告对象为准，允许通过的测
 | Python unittest | `FAILED (failures=N)` 中失败数大于零、错误数为零，每份失败堆栈均为 `AssertionError`。探针需确认每项失败发生在测试方法执行期间；`setUp`、`tearDown`、`addCleanup` 和 `addAsyncCleanup` 失败均会被拒绝。 |
 | pytest | 保留默认或完整堆栈（`--tb=long`）及汇总，失败数大于零，每项失败终止于 `AssertionError`，并有 call 阶段证据。排除 setup/teardown 阶段、用例收集错误及 unittest 生命周期失败，包括 pytest 将 unittest 生命周期失败标成 `FAILED` 的情况。short/line/隐藏堆栈格式暂不支持。 |
 | Node.js test runner | 使用 `node --test --test-reporter=tap`，`# fail` 大于零、cancelled 为零，根本失败均报告 `failureType: 'testCodeFailure'` 和 `code: 'ERR_ASSERTION'`。`subtestsFailed` 父项需有失败子项；汇总计入父测试，排除 suite 容器。 |
-| Vitest 3.2.x（仅 `prove`） | 内置 JSON reporter 与测试体探针共同提供证据。失败数大于零，最终错误与测试体错误一致，来源为真实 Chai/Node 断言实例或探针观察到的 Vitest 快照不匹配。改名的运行时错误、普通对象、文件或 suite 错误、生命周期错误、退出阶段错误、重试及预期失败测试均会被拒绝。 |
+| Vitest 3.2.x / 4.1.12（仅 `prove`） | 内置 JSON reporter 与测试体探针共同提供证据。失败数大于零，最终错误与测试体错误一致，来源为真实 Chai/Node 断言实例或探针观察到的 Vitest 快照不匹配。改名的运行时错误、普通对象、文件或 suite 错误、生命周期错误、退出阶段错误、重试及预期失败测试均会被拒绝。 |
 
-Vitest 省略 `run` 时也只运行一次；显式 watch 模式及 reporter/output 覆盖参数会被拒绝。`-t watch`、`--testNamePattern dev` 等参数值按测试过滤条件处理。`dv` 在回归证明期间关闭 coverage，保留默认的可读报告。Reporter 检查根配置及所有 project 后，接入默认 runner 的内置子类；全局 setup/teardown 继续排除。版本检查接受 Vitest 3.2.x，验证使用 3.2.4，覆盖 Vite 6.3.5、6.4.5 和 7.3.7。Vite 版本由项目选择。
+Vitest 省略 `run` 时也只运行一次；显式 watch 模式及 reporter/output 覆盖参数会被拒绝。`-t watch`、`--testNamePattern dev` 等参数值按测试过滤条件处理。`dv` 在回归证明期间关闭 coverage，保留默认的可读报告。Reporter 检查根配置及所有 project 后，接入默认 runner 的内置子类；全局 setup/teardown 继续排除。版本检查接受 Vitest 3.2.x 和精确版本 4.1.12，其他 4.x 与所有 5.x 版本继续拒绝。3.2.x 基线覆盖 Vite 6.3.5、6.4.5 和 7.3.7。4.1.12 已在 Node 20.20、22.23、24.16 上验证 Vite 6.4.5、7.3.7、8.3.5，依赖分别由 npm 和隔离布局的 pnpm 安装。Vite 版本由项目选择。
+
+4.1.12 适配先校验固定源码指纹，再仅修改阶段独占的依赖副本。探针在 fixture 解析完成后观察原始测试函数，每个执行的测试须完整进入并结束一次。Fixture setup/teardown、hook、断言次数检查和脱离测试体的异步错误均按测试体外错误处理。关闭后的错误集合和报告输出前的最终错误集合必须为空，worker teardown 错误也计入检查。配置中的 `onUnhandledError` 回调及 `aroundEach`/`aroundAll` hook 会使证明失败，源码指纹变化同样拒绝。超时、取消和待完成断言仍由 Vitest 原有包装层处理；异步断言需在测试函数内等待完成。
 
 Vitest 命令行只接受以下参数：
 
@@ -253,20 +255,20 @@ Vitest 命令行只接受以下参数：
 | --- | --- |
 | 运行和全局 API | `run`、`--run`、`--globals`，后两项为无值开关 |
 | 测试选择 | 位置参数形式的文件过滤条件、`-t` / `--testNamePattern`、`--project` |
-| Worker 数量 | `--maxWorkers`、`--minWorkers` |
+| Worker 数量 | `--maxWorkers`；`--minWorkers` 仅供 3.2.x 使用，4.1.12 拒绝两种传值写法 |
 | 仓库内路径 | `-c` / `--config`、`-r` / `--root`、`--dir` |
 
 带值选项支持独立参数和 `--option=value` 写法。其他参数在执行任一阶段前直接拒绝，包括 `--diff`、`--workspace`、watch 和 reporter 覆盖参数。路径必须位于仓库内，并改指向执行副本；测试名正则和 project 名保持字符串原值。
 
 `dv` 要求 Vite/Vitest 报告的测试输入在 red、green 中保持一致，包括配置文件、配置依赖、setup 文件、workspace 文件及可观察到的导入依赖，以及当前 mode、envDir 对应的 `.env`、`.env.local`、`.env.<mode>`、`.env.<mode>.local`。两阶段分别加载各自提交中的配置。仓库内外的输入都记录原始字节哈希和存在状态。仓库内使用相对路径，外部文件使用路径哈希和文件名标识，主目录与绝对路径前缀替换为占位符。PR 导致这些阶段输入变化、新增或删除时，证明直接失败。
 
-报告还对每个 project 解析后的完整测试配置，以及 Vite 环境、define 和模块解析设置按顶层字段计算哈希。执行目录内的路径统一处理，覆盖 RegExp 源码中的路径及转义形式。规范化时排除探针 reporter/runner 路径、缓存目录、API 端口和自动生成的 API／探针标识。报告只保存哈希，差异提示只列顶层字段名。配置值使用时间、随机数或变化中的进程状态计算时，两阶段结果不同就会使证明失败；无法规范化的配置对象同样拒绝。
+报告还对每个 project 解析后的完整测试配置，以及 Vite 环境、define 和模块解析设置按顶层字段计算哈希。执行目录内的路径以带类型的片段统一处理，覆盖 `viteDefine` 中带引号或转义的字符串，以及 RegExp 源码中的路径。普通文本、define 键、正则 flags 和 `lastIndex` 均保留。Setup 导入依赖从 Vite 各环境的模块图采集。规范化时排除探针 reporter/runner 路径、缓存目录、API 端口和自动生成的 API／探针标识。报告只保存哈希，差异提示只列顶层字段名。配置值使用时间、随机数或变化中的进程状态计算时，两阶段结果不同就会使证明失败；无法规范化的配置对象同样拒绝。
 
 检查范围是 Vite/Vitest 报告的输入和最终解析出的配置，`dv` 保留程序原有的文件读取行为。插件或其他代码通过 `fs` 等方式读取、而 Vite 未报告的文件，计入本次待验证改动。例如，插件读取变更后的 `offset.dat` 并用它改写测试时，PASS 表示测试检测到了该文件改动；即使业务模块保持不变，也可能得到 PASS。文件读取结果若改变了最终解析配置，配置检查仍会拒绝这次证明。
 
 所有 runner 都从 head 保留 `tests/`、`test/`、`__tests__/`、`test-utils/`、`test_utils/`、`fixtures/`、`__mocks__/` 内的辅助文件及各级 `conftest.py`，并删除仅在 base 中存在的辅助文件。只改辅助文件不足以构成业务代码差异。导出期望值的 `helper.js` 等测试辅助代码应放在这些路径下；导入关系同时覆盖业务模块，因此文件用途按路径约定识别。
 
-支持内联快照和标准外部快照。`dv` 设置 `CI=true`，清除 `UPDATE_SNAPSHOT`，强制 `--update=false`，并拦截快照保存与删除操作。缺失快照或尝试写入都会让证明失败；触发 Vitest 重写的过时快照条目需先清理。Red 保留 head 的 `.snap`、`__snapshots__` 文件及测试。每次快照读取都要与 head 的原始文件字节及存在状态一致，包括 `toMatchFileSnapshot` 和自定义快照路径。同一测试在 red、green 中读取的仓库相对路径和哈希必须完全一致，实际消费的条目还要按顺序比对文件、条目键及期望序列化内容的哈希。使用快照的测试要求完整名称在同一文件、同一 project 内唯一，名称包含所属 suite。同名测试会使证明失败，跳过的同名项也计入检查。参数化测试应把用例值写进名称，例如 `test.each([0, 1])('value %s', ...)`。条目仍按顺序绑定；切换条目或只在一个阶段消费条目都会让证明失败，提示会指出具体测试和条目。探针依据真实 matcher 的返回结果识别快照不匹配，并在 soft assertion 序列化前判断断言类型。仅把错误改名为 `AssertionError` 会被拒绝。
+支持内联快照和标准外部快照。`dv` 设置 `CI=true`，清除 `UPDATE_SNAPSHOT`，在 3.2.x 中强制 `--update=false`，在 4.1.12 中强制 `--update=none`，并拦截快照保存与删除操作。缺失快照或尝试写入都会让证明失败；触发 Vitest 重写的过时快照条目需先清理。Red 保留 head 的 `.snap`、`__snapshots__` 文件及测试。每次快照读取都要与 head 的原始文件字节及存在状态一致，包括 `toMatchFileSnapshot` 和自定义快照路径。同一测试在 red、green 中读取的仓库相对路径和哈希必须完全一致，实际消费的条目还要按顺序比对文件、条目键及期望序列化内容的哈希。使用快照的测试要求完整名称在同一文件、同一 project 内唯一，名称包含所属 suite。同名测试会使证明失败，跳过的同名项也计入检查。参数化测试应把用例值写进名称，例如 `test.each([0, 1])('value %s', ...)`。条目仍按顺序绑定；切换条目或只在一个阶段消费条目都会让证明失败，提示会指出具体测试和条目。探针依据真实 matcher 的返回结果识别快照不匹配，并在 soft assertion 序列化前判断断言类型。仅把错误改名为 `AssertionError` 会被拒绝。4.1.12 将 `SnapshotClient.match` 的返回值绑定到 matcher 创建的具体 Error，覆盖属性不匹配和原始文件快照的异步路径。Domain/polling 快照（`matchDomain`、`processDomainSnapshot`）及绕过绑定的自定义快照 helper 暂不支持。
 
 最终 JSON 在进程 exit 事件中同步写入，再以 `DV-VITEST-REPORT` 嵌入带哈希的日志。报告要求资源关闭完成、退出码一致，每个执行文件和测试均携带本次探针标识。晚到的异常或拒绝、退出阶段诊断及资源关闭失败均会使报告失效；exit listener 写入后发生的错误也会被拦截。Green 至少有一个测试实际执行并通过，且没有失败或运行器错误。`prove` 校验两份 Vitest 日志后再判定结果。
 
