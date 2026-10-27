@@ -260,7 +260,7 @@ dv init --implementer model-a --base main
 
 工作项流程的 `test_runner` 默认为 `auto`，识别直接调用的 `python -m unittest`、`python -m pytest` / `pytest` 和 `node --test`。**Vitest 仅通过 `dv prove` 支持**，识别 `vitest`、`npx vitest`、`pnpm vitest` 及 `pnpm exec vitest`。工作项的 `redgreen` 和对应证据 gate 会拒绝 Vitest，并提示使用 `dv prove`。两个阶段使用相同的测试命令。直接调用 Python 运行器时，`dv` 会接入内置的阶段探针：unittest 使用启动器，pytest 使用插件，继续沿用命令指定的解释器及已安装的运行器。探针将 `DV-RUNNER-PHASES` 记录写入日志，运行时依赖保持不变。Red 必须退出 1，并输出完整的断言失败报告：
 
-Pytest 的 green 判定以探针读取的报告对象为准，允许通过的测试带有 warning，也支持 `-qq` 和 `-p no:terminal`。XPASS 和错误数必须为零。探针将本轮报告写到 checkout 外的临时文件，`dv` 校验后将日志记录与执行阶段绑定；测试打印的阶段记录按证据异常处理。Red 仍需保留下表要求的堆栈和汇总。
+Pytest 的 green 判定以探针读取的报告对象为准，允许通过的测试带有 warning，也支持 `-qq` 和 `-p no:terminal`。XPASS 和错误数必须为零。探针将本轮报告写到 checkout 外的临时文件，同时通过继承的管道发送原始内容的摘要。`dv` 校验摘要后将日志记录与执行阶段绑定，测试打印、缺失或随后被改写的报告均按证据异常处理。探针与 pytest 插件仍共享同一受信任进程，插件直接修改探针本身属于现有信任边界之外的行为。Red 仍需保留下表要求的堆栈和汇总。
 
 | 运行器 | Red 输出要求 |
 | --- | --- |

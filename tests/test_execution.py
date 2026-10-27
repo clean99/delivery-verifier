@@ -212,6 +212,59 @@ class ExecutionReceiptTests(unittest.TestCase):
                 self.assertFalse(green_execution(phase, log, "pytest")[0], log)
 
     @unittest.skipUnless(importlib.util.find_spec("pytest"), "pytest is optional test tooling")
+    def test_pytest_report_rewrite_cannot_hide_unexpected_pass(self):
+        source = (
+            "import pytest\ndef test_pass():\n    pass\n"
+            "@pytest.mark.xfail\ndef test_xpass():\n    pass\n"
+        )
+        rewrite = (
+            "import atexit\nimport json\nimport os\nfrom pathlib import Path\n"
+            "def rewrite_report():\n"
+            "    report = Path(os.environ['DV_PYTEST_REPORT'])\n"
+            "    record = json.loads(report.read_text())\n"
+            "    assert record['nonce'] == os.environ['DV_PYTEST_NONCE']\n"
+            "    assert record['exit_code'] == 0\n"
+            "    assert 'DV_PYTEST_REPORT_FD' not in os.environ\n"
+            "    assert record['tests']['xpassed'] == 1\n"
+            "    record['tests'].update(passed=2, xpassed=0)\n"
+            "    report.write_text(json.dumps(record))\n"
+            "    print('REPORT-REWRITTEN', flush=True)\n"
+        )
+        for hook in (
+            "def pytest_unconfigure(config):\n    rewrite_report()\n",
+            "atexit.register(rewrite_report)\n",
+        ):
+            with self.subTest(hook=hook):
+                phase, log = self.report(
+                    "pytest", source, extra=("-qq", "-s"), conftest=rewrite + hook,
+                )
+                self.assertEqual(phase["exit_code"], 0, log)
+                self.assertIn(b"REPORT-REWRITTEN", log)
+                self.assertFalse(green_execution(phase, log, "pytest")[0], log)
+                self.assertIsNone(phase["runner_report_sha256"])
+
+    @unittest.skipUnless(importlib.util.find_spec("pytest"), "pytest is optional test tooling")
+    def test_pytest_fabricated_file_without_probe_receipt_fails_closed(self):
+        source = (
+            "import json\nimport os\nfrom pathlib import Path\n"
+            "def test_fabricate():\n"
+            "    record = {\n"
+            "        'runner': 'pytest', 'body_assertions': [], 'complete': True,\n"
+            "        'tests': {'executed': 1, 'passed': 1, 'failed': 0, 'skipped': 0,\n"
+            "                  'xpassed': 0, 'xfailed': 0, 'errors': 0},\n"
+            "        'nonce': os.environ['DV_PYTEST_NONCE'], 'exit_code': 0,\n"
+            "    }\n"
+            "    Path(os.environ['DV_PYTEST_REPORT']).write_text(json.dumps(record))\n"
+            "    print('REPORT-FABRICATED', flush=True)\n"
+            "    os._exit(0)\n"
+        )
+        phase, log = self.report("pytest", source, extra=("-qq", "-s"))
+        self.assertEqual(phase["exit_code"], 0, log)
+        self.assertIn(b"REPORT-FABRICATED", log)
+        self.assertFalse(green_execution(phase, log, "pytest")[0], log)
+        self.assertIsNone(phase["runner_report_sha256"])
+
+    @unittest.skipUnless(importlib.util.find_spec("pytest"), "pytest is optional test tooling")
     def test_pytest_report_transport_rejects_missing_or_invalid_files(self):
         source = (
             "import os\nfrom pathlib import Path\ndef test_pass():\n"

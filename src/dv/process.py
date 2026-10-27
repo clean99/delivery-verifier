@@ -12,7 +12,8 @@ from dv.common import DVError, digest
 
 
 def run(
-    command: list[str], cwd: Path, log: Path, timeout: int, *, env: dict[str, str] | None = None
+    command: list[str], cwd: Path, log: Path, timeout: int, *, env: dict[str, str] | None = None,
+    pass_fds: tuple[int, ...] = (),
 ) -> dict:
     if os.name != "posix":
         raise DVError("Safe process-group cleanup requires POSIX", 3, "unsupported_platform")
@@ -33,6 +34,7 @@ def run(
                     stderr=subprocess.STDOUT,
                     start_new_session=True,
                     env=env,
+                    pass_fds=pass_fds,
                 )
             except OSError as error:
                 stream.write(f"Cannot launch command: {error}\n".encode())

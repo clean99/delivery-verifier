@@ -5,7 +5,7 @@
 ### Fixed
 
 - `dv prove` accepts unchanged tracked test-support symlinks that directly resolve to regular files inside both snapshots with identical target bytes and modes. Keep these links from base instead of overlaying them from head. Added, deleted or changed links, escaping targets, chains, loops and links to changed production files still fail before either phase.
-- Pytest green validation uses probe report objects instead of printable terminal summaries. Passing runs with warnings, quiet output or no terminal reporter qualify; strict/non-strict XPASS and runner errors do not. The probe records expected failures and lifecycle/collection errors independently, and delivers its nonce-bound report through a temporary file outside the execution checkout. Printed or missing phase records fail closed.
+- Pytest green validation uses probe report objects instead of printable terminal summaries. Passing runs with warnings, quiet output or no terminal reporter qualify; strict/non-strict XPASS and runner errors do not. The probe records expected failures and lifecycle/collection errors independently, and delivers its nonce-bound report through a temporary file outside the execution checkout. A digest sent by the probe through an inherited pipe detects later report-file rewrites before the parent binds evidence. Printed, missing or rewritten phase records fail closed.
 
 ## 0.3.0 — 2026-10-27
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import runpy
@@ -133,6 +134,9 @@ _pytest_reports: dict[str, dict] = {}
 _pytest_duplicate = False
 _pytest_collection: list[str] = []
 _pytest_errors = 0
+# Pytest imports this explicit plugin before repository conftests. Do not expose
+# the receipt channel through their inherited environment.
+_pytest_report_fd = os.environ.pop("DV_PYTEST_REPORT_FD", None)
 
 
 def pytest_sessionstart(session):
@@ -219,9 +223,13 @@ def pytest_sessionfinish(session, exitstatus):
             "runner": "pytest", "body_assertions": _pytest_failures, **execution,
             "nonce": os.environ.get("DV_PYTEST_NONCE"), "exit_code": int(exitstatus),
         }
-        # Stdout is test-controlled. Only the parent may put evidence in the log.
-        with open(report, "x", encoding="utf-8") as stream:
-            json.dump(record, stream)
+        encoded = json.dumps(record).encode()
+        # Seal the bytes we produced, not a later read of the mutable report file.
+        with open(report, "xb") as stream:
+            stream.write(encoded)
+        if _pytest_report_fd is not None:
+            with os.fdopen(int(_pytest_report_fd), "wb") as stream:
+                stream.write(hashlib.sha256(encoded).hexdigest().encode())
 
 
 if __name__ == "__main__":

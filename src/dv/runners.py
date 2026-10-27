@@ -204,12 +204,29 @@ def run_pytest(command: list[str], cwd: Path, log: Path, timeout: int,
         if report.is_relative_to(cwd.resolve()):
             raise DVError("Pytest probe temporary directory must be outside the execution checkout")
         nonce = uuid.uuid4().hex
-        env = {**env, "DV_PYTEST_REPORT": str(report), "DV_PYTEST_NONCE": nonce}
-        phase = process.run(instrument(command, env, declared), cwd, log, timeout, env=env)
+        reader, writer = os.pipe()
+        try:
+            env = {**env, "DV_PYTEST_REPORT": str(report), "DV_PYTEST_NONCE": nonce,
+                   "DV_PYTEST_REPORT_FD": str(writer)}
+            phase = process.run(instrument(command, env, declared), cwd, log, timeout, env=env,
+                                pass_fds=(writer,))
+            # A fixed-size receipt cannot fill the pipe. Never wait for a missing
+            # receipt or an inherited descriptor held by an escaped descendant.
+            os.set_blocking(reader, False)
+            try:
+                sealed_digest = os.read(reader, 65)
+            except BlockingIOError:
+                sealed_digest = b""
+        finally:
+            os.close(reader)
+            os.close(writer)
         try:
             if report.is_symlink() or not report.is_file():
                 raise ValueError("missing or nonregular report")
-            record = json.loads(report.read_bytes())
+            encoded = report.read_bytes()
+            if sealed_digest != digest(encoded).encode():
+                raise ValueError("report receipt mismatch")
+            record = json.loads(encoded)
             if not isinstance(record, dict) or record.get("nonce") != nonce:
                 raise ValueError("report nonce mismatch")
             if record.get("exit_code") != phase["exit_code"]:
@@ -217,7 +234,7 @@ def run_pytest(command: list[str], cwd: Path, log: Path, timeout: int,
         except (OSError, ValueError):
             record = None
         encoded = json.dumps(record).encode()
-        # Bind only the out-of-band report, never a record printed by a test.
+        # Bind only a report matching the probe's receipt, never test stdout.
         phase["runner_report_sha256"] = digest(encoded) if record is not None else None
         with log.open("ab") as stream:
             stream.write(b"\nDV-RUNNER-PHASES " + encoded + b"\n")
