@@ -18,6 +18,14 @@ Only Node TAP and Vitest proofs prepare Node dependencies; Python proofs do not 
 
 The [first-usable contract and validation record](design/first-usable-version.md) defines ref resolution, raw-blob materialization, retained tests, execution counts, cleanup and installation acceptance. The [handbook](handbook/green-tests.md) provides pinned synthetic replays and remaining blind spots. The sections below continue to describe the separate item-based delivery workflow.
 
+## GitHub Actions adapter
+
+The root composite action is a separate network-enabled adapter around `dv prove`; CLI ref resolution and proof criteria stay unchanged. The CLI defaults to local `main`. The adapter instead fetches an explicit `origin` ref, the PR base branch on `pull_request`, or the repository default branch, then passes the fetched commit through `--base`. A full checkout is required. The checked-out `HEAD` is used, including GitHub's merge commit for the default PR checkout.
+
+The adapter sets up Python 3.12 without changing the test command's PATH. By default, pipx installs the action's own source at the pinned action commit; an explicit version selects a GitHub Release wheel. The installation environment is temporary and removed after execution. Inputs reach the adapter through environment variables and subprocess argument arrays. Project dependencies remain the caller's responsibility, and `working-directory` names a repository root rather than changing the focused command's working directory inside a repository.
+
+A successful process exit, complete passing proof, qualifying red/green checks and matching saved evidence are all required for `ok=true`. Missing or inconsistent results remain failures. The adapter copies only that attempt's evidence to a runner temporary directory, writes a short job summary and outputs, uploads the directory, then fails the action if proof failed. Adapter errors retain diagnostics even when the CLI never created a proof. Artifact uploads change the evidence visibility: logs can contain secrets, so use disposable PR runners, read-only permissions and no secrets. This adapter adds neither sandboxing nor delivery approval.
+
 ## Verification ladder
 
 | Level | Question | Evidence and gate behavior |

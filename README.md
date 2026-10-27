@@ -14,10 +14,10 @@ For people shipping changes written by coding agents. Runs locally with any agen
 
 Requirements: Python 3.10–3.13 with `venv` and `pip`, Git 2.38+, Linux/macOS. Some Linux distributions package `venv` separately (for example, `python3-venv`).
 
-Install the **v0.2.0 GitHub Release wheel** with [pipx](https://pipx.pypa.io/latest/how-to/install-pipx.html):
+Install the **v0.3.0 GitHub Release wheel** with [pipx](https://pipx.pypa.io/latest/how-to/install-pipx.html):
 
 ```sh
-pipx install https://github.com/clean99/delivery-verifier/releases/download/v0.2.0/delivery_verifier-0.2.0-py3-none-any.whl
+pipx install https://github.com/clean99/delivery-verifier/releases/download/v0.3.0/delivery_verifier-0.3.0-py3-none-any.whl
 pipx ensurepath
 ```
 
@@ -57,6 +57,70 @@ Hygiene and review are opt-in: add `--hygiene` or `--require-review .dv/item.jso
 Dependency copies use APFS clones or Linux reflinks where supported; fallback copies check free space first and can be slower on large dependency trees.
 
 For an offline source-only example, run `python3 examples/demo/run.py` from this checkout. It demonstrates the separate item-based delivery gate with synthetic review evidence.
+
+## GitHub Actions
+
+Add the action after checkout and dependency installation. This pytest example proves the checked-out PR merge commit against its merge base with the PR's base branch:
+
+```yaml
+name: Regression proof
+on: [pull_request]
+permissions:
+  contents: read
+jobs:
+  prove:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+      - run: python -m pip install pytest==8.4.2
+      - uses: clean99/delivery-verifier@v0.3.0
+        with:
+          test: python -m pytest --tb=long tests/test_words.py
+```
+
+For a project with Vitest 3.2.x in its committed package manifest and lockfile:
+
+```yaml
+name: Regression proof
+on: [pull_request]
+permissions:
+  contents: read
+jobs:
+  prove:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '20'
+      - run: npm ci
+      - uses: clean99/delivery-verifier@v0.3.0
+        with:
+          test: npx vitest run tests/words.test.js
+```
+
+Pinning the action to a reviewed full commit SHA is the most locked-down option.
+
+| Input | Default | Meaning |
+| --- | --- | --- |
+| `test` | Required | Direct supported runner command, split as argv without shell expansion. |
+| `base` | PR base branch on `pull_request`, repository default branch otherwise | Branch, tag or full commit ID fetched from `origin`. `origin/main` and `refs/heads/main` are also accepted. The proof uses its merge base with checked-out `HEAD`. |
+| `version` | `local` | Install with pipx from the action's own source at the same pinned commit. An explicit release version, such as `0.3.0` or `v0.3.0`, installs its GitHub Release wheel instead. |
+| `timeout` | `1800` | Positive integer seconds per red/green phase. |
+| `working-directory` | `.` | Git repository root, relative to `GITHUB_WORKSPACE` or absolute. Tests run from this root; use repository-relative test paths. |
+
+The action prepares its own Python 3.12 and pipx environment without replacing the test command's Python or PATH. Install your project's dependencies before the action. Shallow checkouts fail with guidance to set `fetch-depth: 0`; the CLI itself still never fetches. On a push to the default branch, select an earlier `base` explicitly if you want to prove a previous change.
+
+Outputs are `ok` (`true` or `false`), `verdict` (`PASS` or `FAIL`), and `evidence-path` (an absolute directory). The job summary shows the verdict, red/green status and reason. Each invocation uploads a uniquely named `dv-proof-*` artifact with a seven-day retention, including `proof.json`, phase logs and adapter diagnostics. Early failures retain the available diagnostics. A failed or incomplete proof fails the action after the upload attempt; keep the action as a required check rather than using `continue-on-error`.
+
+The existing runner and proof limits apply on Linux/macOS. Worktrees are not a security sandbox, and uploaded logs may contain secrets. Run PR code on disposable hosted runners with read-only permissions and no secrets; do not run untrusted PR code through `pull_request_target`. Review artifact visibility and the test command before enabling the action. Full-suite checks, review and approval remain separate.
 
 ## What the demo checks
 
@@ -101,7 +165,7 @@ The gate reruns your configured repository checks, flags issues such as focused 
 After [installing uv](https://docs.astral.sh/uv/getting-started/installation/), install the same release wheel:
 
 ```sh
-uv tool install https://github.com/clean99/delivery-verifier/releases/download/v0.2.0/delivery_verifier-0.2.0-py3-none-any.whl
+uv tool install https://github.com/clean99/delivery-verifier/releases/download/v0.3.0/delivery_verifier-0.3.0-py3-none-any.whl
 uv tool update-shell
 ```
 
@@ -114,7 +178,7 @@ This option needs neither pipx nor uv:
 ```sh
 python3 -m venv .venv
 . .venv/bin/activate
-python -m pip install https://github.com/clean99/delivery-verifier/releases/download/v0.2.0/delivery_verifier-0.2.0-py3-none-any.whl
+python -m pip install https://github.com/clean99/delivery-verifier/releases/download/v0.3.0/delivery_verifier-0.3.0-py3-none-any.whl
 dv --version
 dv prove --help
 ```
@@ -123,13 +187,13 @@ Keep this environment activated when changing into your project; activation puts
 
 ### Git tag
 
-Use the pinned v0.2.0 source tag instead of a moving branch:
+Use the pinned v0.3.0 source tag instead of a moving branch:
 
 ```sh
-pipx install "delivery-verifier @ git+https://github.com/clean99/delivery-verifier.git@v0.2.0"
+pipx install "delivery-verifier @ git+https://github.com/clean99/delivery-verifier.git@v0.3.0"
 ```
 
-The release also includes the source archive [`delivery_verifier-0.2.0.tar.gz`](https://github.com/clean99/delivery-verifier/releases/download/v0.2.0/delivery_verifier-0.2.0.tar.gz). Source installs need setuptools >=68 at build time, normally downloaded by the installer. Offline source installation needs locally available build tooling. The wheel needs no source build. Once installed, `dv` uses Python's standard library and your local Git executable.
+The release also includes the source archive [`delivery_verifier-0.3.0.tar.gz`](https://github.com/clean99/delivery-verifier/releases/download/v0.3.0/delivery_verifier-0.3.0.tar.gz). Source installs need setuptools >=68 at build time, normally downloaded by the installer. Offline source installation needs locally available build tooling. The wheel needs no source build. Once installed, `dv` uses Python's standard library and your local Git executable.
 
 ### From a local checkout (contributors)
 

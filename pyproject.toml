@@ -5,7 +5,7 @@ backend-path = ["."]
 
 [project]
 name = "delivery-verifier"
-version = "0.2.0"
+version = "0.3.0"
 description = "Local verification gates for agent-made code changes"
 readme = "README.md"
 license = {file = "LICENSE"}

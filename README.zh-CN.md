@@ -14,10 +14,10 @@
 
 准备带 `venv` 和 `pip` 的 Python 3.10–3.13、Git 2.38+ 及 Linux/macOS。部分 Linux 发行版需单独安装 venv 系统包，例如 `python3-venv`。
 
-用 [pipx](https://pipx.pypa.io/latest/how-to/install-pipx.html) 安装 **GitHub Release v0.2.0 的 wheel**：
+用 [pipx](https://pipx.pypa.io/latest/how-to/install-pipx.html) 安装 **GitHub Release v0.3.0 的 wheel**：
 
 ```sh
-pipx install https://github.com/clean99/delivery-verifier/releases/download/v0.2.0/delivery_verifier-0.2.0-py3-none-any.whl
+pipx install https://github.com/clean99/delivery-verifier/releases/download/v0.3.0/delivery_verifier-0.3.0-py3-none-any.whl
 pipx ensurepath
 ```
 
@@ -57,6 +57,70 @@ dv prove --test "vitest run tests/words.test.js"
 依赖优先使用 APFS clone 或 Linux reflink；不支持时先检查空间再完整复制，大型依赖树会更慢。
 
 源码离线示例仍可通过 `python3 examples/demo/run.py` 运行，演示独立的工作项交付流程，并使用模拟评审记录。
+
+## GitHub Actions
+
+在 checkout 和依赖安装后加入 action。下例使用 pytest，将检出的 PR 合并提交与 PR 目标分支的合并基点作比较：
+
+```yaml
+name: Regression proof
+on: [pull_request]
+permissions:
+  contents: read
+jobs:
+  prove:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+      - run: python -m pip install pytest==8.4.2
+      - uses: clean99/delivery-verifier@v0.3.0
+        with:
+          test: python -m pytest --tb=long tests/test_words.py
+```
+
+项目已在提交的依赖清单和锁文件中配置 Vitest 3.2.x 时，可使用：
+
+```yaml
+name: Regression proof
+on: [pull_request]
+permissions:
+  contents: read
+jobs:
+  prove:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '20'
+      - run: npm ci
+      - uses: clean99/delivery-verifier@v0.3.0
+        with:
+          test: npx vitest run tests/words.test.js
+```
+
+需要最严格的版本锁定时，将 action 固定到评审过的完整 commit SHA。
+
+| 输入 | 默认值 | 含义 |
+| --- | --- | --- |
+| `test` | 必填 | 直接调用受支持的运行器，按参数数组解析，保留原有 shell 展开限制。 |
+| `base` | `pull_request` 的目标分支，其他事件使用仓库默认分支 | 从 `origin` 拉取的分支、tag 或完整 commit ID，也接受 `origin/main`、`refs/heads/main`。证明基线为它与检出 `HEAD` 的合并基点。 |
+| `version` | `local` | 用 pipx 从 action 自身的源码目录安装，与固定的 action commit 一致。显式填写 `0.3.0` 或 `v0.3.0` 等发布版本时，改为安装对应的 GitHub Release wheel。 |
+| `timeout` | `1800` | 每个 red/green 阶段的超时秒数，取正整数。 |
+| `working-directory` | `.` | Git 仓库根目录，相对于 `GITHUB_WORKSPACE`，也可传绝对路径。测试从此根目录运行，测试路径按仓库根目录填写。 |
+
+Action 单独准备 Python 3.12 和 pipx 环境，保留测试命令原有的 Python 和 PATH。项目依赖需提前安装。浅克隆会验证失败，并提示设置 `fetch-depth: 0`；拉取操作只在 action 适配层执行。默认分支上的 push 若要验证之前的改动，应显式指定较早的 `base`。
+
+输出为 `ok`（`true` 或 `false`）、`verdict`（`PASS` 或 `FAIL`）和 `evidence-path`（证据目录绝对路径）。Job summary 显示结论、red/green 状态和原因。每次调用上传独立命名的 `dv-proof-*` artifact，保留七天，包含 `proof.json`、阶段日志及适配层诊断。早期失败保留已有诊断。失败或未完成的证明在尝试上传后使 action 失败；应将其设为必需检查，保持默认的失败行为。
+
+Linux/macOS 上沿用现有运行器契约和证明范围。Worktree 只隔离执行目录，上传日志可能包含敏感信息。PR 代码应在一次性的托管 runner 上运行，权限设为只读，并与 secrets 隔离；`pull_request_target` 不适合执行不受信任的 PR 代码。启用前检查测试命令和 artifact 可见范围。完整测试、评审和批准继续单独执行。
 
 ## 示例：检查连续空格的修复
 
@@ -101,7 +165,7 @@ Meaningful regression proved: red=1, green=0.
 按官方指引[安装 uv](https://docs.astral.sh/uv/getting-started/installation/)，再安装同一份 wheel：
 
 ```sh
-uv tool install https://github.com/clean99/delivery-verifier/releases/download/v0.2.0/delivery_verifier-0.2.0-py3-none-any.whl
+uv tool install https://github.com/clean99/delivery-verifier/releases/download/v0.3.0/delivery_verifier-0.3.0-py3-none-any.whl
 uv tool update-shell
 ```
 
@@ -114,7 +178,7 @@ uv tool update-shell
 ```sh
 python3 -m venv .venv
 . .venv/bin/activate
-python -m pip install https://github.com/clean99/delivery-verifier/releases/download/v0.2.0/delivery_verifier-0.2.0-py3-none-any.whl
+python -m pip install https://github.com/clean99/delivery-verifier/releases/download/v0.3.0/delivery_verifier-0.3.0-py3-none-any.whl
 dv --version
 dv prove --help
 ```
@@ -123,13 +187,13 @@ dv prove --help
 
 ### Git tag：安装固定版本
 
-通过 v0.2.0 tag 安装对应源码：
+通过 v0.3.0 tag 安装对应源码：
 
 ```sh
-pipx install "delivery-verifier @ git+https://github.com/clean99/delivery-verifier.git@v0.2.0"
+pipx install "delivery-verifier @ git+https://github.com/clean99/delivery-verifier.git@v0.3.0"
 ```
 
-Release 也提供源码归档 [`delivery_verifier-0.2.0.tar.gz`](https://github.com/clean99/delivery-verifier/releases/download/v0.2.0/delivery_verifier-0.2.0.tar.gz)。源码安装在构建时需要 setuptools >=68，安装器通常会下载它；离线安装需提前准备构建工具。Wheel 可直接安装。安装后的运行时依赖是 Python 标准库和本地 Git。
+Release 也提供源码归档 [`delivery_verifier-0.3.0.tar.gz`](https://github.com/clean99/delivery-verifier/releases/download/v0.3.0/delivery_verifier-0.3.0.tar.gz)。源码安装在构建时需要 setuptools >=68，安装器通常会下载它；离线安装需提前准备构建工具。Wheel 可直接安装。安装后的运行时依赖是 Python 标准库和本地 Git。
 
 ### 本地源码：用于开发贡献
 

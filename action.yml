@@ -1,0 +1,63 @@
+name: delivery-verifier
+description: Check that a regression test fails without the fix and passes with it
+inputs:
+  test:
+    description: Direct unittest, pytest, Node TAP, or Vitest test command
+    required: true
+  base:
+    description: Origin branch, tag, or full commit ID; defaults to the PR base or default branch
+    required: false
+  version:
+    description: Release version (with or without v), or local for this action's source
+    default: local
+  timeout:
+    description: Timeout in seconds for each red/green phase
+    default: '1800'
+  working-directory:
+    description: Repository root, relative to GITHUB_WORKSPACE or absolute
+    default: '.'
+outputs:
+  ok:
+    description: 'true only when dv exits successfully with a complete passing proof'
+    value: ${{ steps.proof.outputs.ok || 'false' }}
+  verdict:
+    description: PASS or FAIL
+    value: ${{ steps.proof.outputs.verdict || 'FAIL' }}
+  evidence-path:
+    description: Absolute path to the evidence directory uploaded as an artifact
+    value: ${{ steps.proof.outputs.evidence-path }}
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      id: python
+      with:
+        python-version: '3.12'
+        update-environment: false
+    - name: Install dv and prove the regression
+      id: proof
+      shell: bash
+      env:
+        DV_PYTHON: ${{ steps.python.outputs.python-path }}
+        DV_ACTION_PATH: ${{ github.action_path }}
+        DV_TEST: ${{ inputs.test }}
+        DV_BASE: ${{ inputs.base }}
+        DV_DEFAULT_BASE: ${{ github.event_name == 'pull_request' && github.base_ref || github.event.repository.default_branch }}
+        DV_VERSION: ${{ inputs.version }}
+        DV_TIMEOUT: ${{ inputs.timeout }}
+        DV_WORKING_DIRECTORY: ${{ inputs.working-directory }}
+      run: '"$DV_PYTHON" -I "$DV_ACTION_PATH/src/dv/github_action.py"'
+    - name: Upload regression evidence
+      if: ${{ always() && steps.proof.outputs.evidence-path != '' }}
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: dv-proof-${{ steps.proof.outputs.artifact-id }}
+        path: ${{ steps.proof.outputs.evidence-path }}
+        if-no-files-found: error
+        retention-days: 7
+    - name: Require a passing proof
+      if: ${{ always() }}
+      shell: bash
+      env:
+        DV_OK: ${{ steps.proof.outputs.ok }}
+      run: test "$DV_OK" = true
