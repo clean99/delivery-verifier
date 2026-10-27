@@ -57,7 +57,10 @@ def fetch_base(repo: Path, base: str, default: str) -> str:
         raise ValueError("No default branch is available; set the base input")
     if branch.startswith("refs/") and not branch.startswith("refs/heads/"):
         raise ValueError("base must name an origin branch; only refs/heads/ refs are supported")
-    ref = branch if branch.startswith("refs/heads/") else f"refs/heads/{branch}"
+    branch = branch.removeprefix("refs/heads/")
+    if branch.startswith("-"):
+        raise ValueError("base branch name must not begin with '-'")
+    ref = f"refs/heads/{branch}"
     git(repo, "check-ref-format", ref)
     try:
         git(repo, "fetch", "--no-tags", "--no-recurse-submodules", "--", "origin", ref)

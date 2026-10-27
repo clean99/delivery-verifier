@@ -189,6 +189,25 @@ class GithubActionTests(unittest.TestCase):
                 with self.subTest(base=base), self.assertRaisesRegex(ValueError, "refs/heads/"):
                     action.fetch_base(box.root.resolve(), base, "main")
 
+    def test_leading_dash_branches_are_rejected_before_fetch(self):
+        box = Sandbox()
+        self.addCleanup(box.close)
+        with tempfile.TemporaryDirectory() as temp:
+            remote = Path(temp) / "remote.git"
+            git(box.root, "clone", "--bare", str(box.root), str(remote))
+            git(box.root, "remote", "add", "origin", str(remote))
+            for name in ("--help", "-base"):
+                git(remote, "update-ref", f"refs/heads/{name}", box.head)
+            for branch in ("--help", "-base", "refs/heads/--help", "refs/heads/-base"):
+                for base, default in ((branch, "main"), ("", branch)):
+                    with self.subTest(base=base, default=default), patch.object(
+                        action, "git", wraps=action.git
+                    ) as calls:
+                        with self.assertRaisesRegex(ValueError, "must not begin with '-'"):
+                            action.fetch_base(box.root.resolve(), base, default)
+                        self.assertFalse(any(call.args[1] == "fetch"
+                                             for call in calls.call_args_list))
+
     def test_slash_branch_is_fetched_in_the_heads_namespace(self):
         box = Sandbox()
         self.addCleanup(box.close)
