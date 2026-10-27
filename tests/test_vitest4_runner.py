@@ -86,10 +86,33 @@ class RealVitest4Tests(unittest.TestCase):
             "x: async ({}, use) => { expect(value).toBe(2); await use(2); }});"
             "extended('fixture-only regression', ({x}) => { expect(x).toBe(2); });")
 
+    def test_worker_teardown_errors_stay_closed(self):
+        """Worker teardown can leave exit 0 and only ctx.state errors after close."""
+        for pool in ("forks", "threads"):
+            with self.subTest(pool=pool):
+                self.refuse("const extended = test.extend({x: [async ({}, use) => {"
+                    "await use(value); await new Promise(resolve => setTimeout(resolve, 100));"
+                    "throw new Error('worker teardown must be rejected');"
+                    "}, {scope: 'worker'}]});"
+                    "extended('value', ({x}) => expect(x).toBe(2));", {
+                        "vitest.config.mjs": f"export default {{test: {{pool: '{pool}'}}}};",
+                    })
+
     def test_snapshot_match_path_stays_closed(self):
         """SnapshotClient.match bypasses assert's read and live-error attribution."""
         self.refuse("test('value', () => expect(value).toMatchSnapshot());",
                     {SNAPSHOT: 'exports[`value 1`] = `2`;\n'})
+
+    def test_domain_snapshot_path_stays_closed(self):
+        """matchDomain/processDomainSnapshot bypass match's read/error attribution."""
+        self.refuse("import {Snapshots} from 'vitest';"
+            "const domain = {name: 'number', capture: value => value,"
+            "render: String, parseExpected: Number,"
+            "match: (actual, expected) => ({pass: actual === expected})};"
+            "expect.extend({toMatchNumberSnapshot(received) {"
+            "return Snapshots.toMatchDomainSnapshot.call(this, domain, received); }});"
+            "test('value', () => expect(value).toMatchNumberSnapshot());",
+            {SNAPSHOT: 'exports[`value 1`] = `2`;\n'})
 
     def test_vite_define_checkout_paths_stay_closed(self):
         """viteDefine must normalize quoted roots without discarding config identity."""

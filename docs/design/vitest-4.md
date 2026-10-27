@@ -4,7 +4,7 @@
 
 This is a design, not enabled support. Both version checks still accept only Vitest 3.2.x. Vitest 4.1.12 needs its own adapter and an exact allowlist; 5.x remains a separate change. The [existing proof contract](../design.md#red-to-green-proof) still applies.
 
-`tests/test_vitest4_runner.py` preserves six counterexamples using optional, separately pinned tooling. The tests assert today's refusal, not future support. They do not patch the version checks or install dependencies. Prepare the tooling explicitly from the public registry:
+`tests/test_vitest4_runner.py` preserves eight counterexamples using optional, separately pinned tooling. The tests assert today's refusal, not future support. They do not patch the version checks or install dependencies. Prepare the tooling explicitly from the public registry:
 
 ```sh
 npm install --prefix .dv/vitest4 --registry=https://registry.npmjs.org/ \
@@ -51,11 +51,11 @@ A production implementation needs either an upstream body-boundary hook or an ex
 
 The production receipt should distinguish `entered`, `finished`, body errors and errors outside the body. Missing activation is a rejection, not evidence of no fixtures. Require exactly one completed invocation for every executed test, a per-run nonce and task identity, and equality between classified body errors and the final runner errors. Preserve stock timeout, cancellation, pending async-assertion and assertion-count behavior; those outer wrappers must not acquire body attribution simply because they report a failure for that task.
 
-Use per-test async context only during the original handler invocation, with a closed flag on settlement. An inherited async store alone is insufficient: detached work can retain it after the body returns. Soft assertions need live-error observation and a task-bound token, not a before/after slice of serialized error arrays. Fixtures can suspend across the body and resume during teardown; their async work must remain outside its context. Reject late errors through the existing shutdown checks.
+Use per-test async context only during the original handler invocation, with a closed flag on settlement. An inherited async store alone is insufficient: detached work can retain it after the body returns. Soft assertions need live-error observation and a task-bound token, not a before/after slice of serialized error arrays. Fixtures can suspend across the body and resume during teardown; their async work must remain outside its context. The existing shutdown checks miss worker teardown errors: also inspect Vitest's final error collection after close, as described below.
 
 ### Prototype result
 
-Real runs used npm Vitest 4.1.12, Vite 7.3.7 and Node 20.20.2, with read-only snapshots. Every case ran once with `value = 1` and once with `value = 2`; all green runs exited zero and entered/finished the body once.
+Real runs used npm Vitest 4.1.12, Vite 7.3.7 and Node 20.20.2, with read-only snapshots. Each lifecycle case below ran with `value = 1` and `value = 2` in both forks and threads; all green runs exited zero and entered/finished the body once.
 
 | Red failure location | Body entered | Body errors | Stock result |
 | --- | --- | --- | --- |
@@ -70,6 +70,32 @@ Real runs used npm Vitest 4.1.12, Vite 7.3.7 and Node 20.20.2, with read-only sn
 The fixture-teardown replay yielded duplicate final errors in Vitest; neither became a body error. These runs demonstrate the insertion point, not a complete proof adapter. The prototype does not implement soft/snapshot classification, concurrency, cancellation or hardened receipt emission.
 
 To reproduce the experiment, use the fixture above and a control whose fixture does only `await use(value)`. Mark only `withFixtures(handler, { context })`, dispatch its five context-bearing returns through an async observer, and record body entry, settlement and caught errors on `context.task.meta`. Run the stock CLI with a reporter that records final task/suite errors. Assert that setup-red never enters, body-red enters and catches the assertion, and both heads pass. The inspected runner chunk's original SHA-256 is `bf6af6d2f4469911879a67e83b8f9e7b20332cf42795032c53457b10ccc1c617`.
+
+### Worker teardown and final errors
+
+A worker-scoped fixture can fail after `onTestRunEnd` without throwing from `ctx.close`, writing stderr or emitting a process-level error. The review reproduction uses `await use(value); throw new Error('worker teardown must be rejected')` with `{ scope: 'worker' }`, and a body that checks the fixture value. In both forks and threads, the base body failed and the head body passed; the head process exited zero while `lateErrors`, `lateStderr` and the run-end errors were empty. Only `ctx.state.getUnhandledErrors()` contained the `Teardown Error` at exit. Treating that run as a proof would accept a broken green phase.
+
+For the exact 4.1.12 adapter, use the exposed, typed `ctx.state.getUnhandledErrors()` accessor **after awaiting the original `ctx.close()`**. Read the entire collection, not only errors seen at run end or a delta from it. Require an available accessor, a successful read returning an array, completed shutdown and an empty collection in both phases. Any collected error rejects the proof; it must not become a body error. Re-read at receipt emission, retaining existing close-rejection, stderr, process-error and post-emission invalidation checks. Reject configured `onUnhandledError` callbacks: returning false suppresses insertion into the collection.
+
+This ordering is supported by the pinned implementation, not by a generic post-run reporter hook. In `vitest@4.1.12/dist/chunks/cli-api.B0Pz1_R7.js`:
+
+- Lines 3027–3035 record a worker's stop response with `state.catchError(..., "Teardown Error")` before resolving the stop promise.
+- Lines 3547–3551 start worker termination without awaiting it, so arrival before or after `onTestRunEnd` is timing-dependent. Lines 3572–3583 await the pending terminations during pool close.
+- Lines 12031–12041 store unsuppressed errors and return the full collection. The accessor and `ctx.state` are declared in `dist/chunks/reporters.d.DtoKVV2s.d.ts:1164,1297`.
+- Lines 14011–14024 await pool close through `Promise.allSettled`. A fulfilled outer close is not proof of error-free shutdown. `onClose` callbacks join that same concurrent wait, so they are not a post-close checkpoint.
+
+Bind these source identities and ordering assumptions alongside the runner instrumentation; reject an unrecognized implementation or a missing final-state checkpoint. This permits worker-scoped fixtures only when that checkpoint is verified, rather than assuming a cross-version stable teardown hook. All 4.x versions remain rejected in this phase.
+
+The updated prototype adds that post-close read and an exit-time recheck. Its worker-teardown replay adds a 100 ms delay after `use` to exercise the late-arrival ordering; the unmodified review reproduction above also exhibited it without a delay. Both pools produced the same results:
+
+| Worker fixture case | Body result | Errors at run end | Errors after close | Shutdown accepted | Prototype exit |
+| --- | --- | --- | --- | --- | --- |
+| Teardown throws, base | Assertion failed | None | Teardown Error | No | 1 |
+| Teardown throws, head | Passed | None | Teardown Error | No | 1 |
+| Clean teardown, base | Assertion failed | None | None | Yes | 1 |
+| Clean teardown, head | Passed | None | None | Yes | 0 |
+
+All bodies entered and finished once. Only the base assertion became a body error; teardown never did. `tests/test_vitest4_runner.py` retains the delayed worker fixture for both pools at today's version gate. These are prototype observations, not enabled fixture support.
 
 ### Alternatives rejected
 
@@ -89,7 +115,7 @@ Move per-test read attribution from `SnapshotClient.assert` to `SnapshotClient.m
 
 `match` returns a result; `assertMatchResult` in Vitest's matcher layer creates the plain native Error afterwards. Instrument that construction boundary so only the exact result from an observed mismatch binds the exact thrown Error to the active body. A mismatch counter followed by an arbitrary thrown Error is not sufficient. Cover custom messages, property mismatches that return before `SnapshotState.match`, raw-file promises, soft assertions and swallowed mismatches followed by unrelated errors. Custom matcher helpers that consume a result without this binding must fail closed until explicitly supported.
 
-Capture the expected entry before any overwrite and check the stock key/counter. `probeExpectedSnapshot` can consume an entry even when property comparison returns early. Domain and polling snapshot paths use additional entry points, including `matchDomain` and `processDomainSnapshot`; reject them initially rather than omitting their reads or treating them as ordinary snapshots.
+Capture the expected entry before any overwrite and check the stock key/counter. `probeExpectedSnapshot` can consume an entry even when property comparison returns early. Domain and polling snapshot paths use additional entry points, including `matchDomain` and `processDomainSnapshot`; reject them initially rather than omitting their reads or treating them as ordinary snapshots. The domain refusal test registers a custom matcher through `expect.extend` and `Snapshots.toMatchDomainSnapshot`, with a numeric domain adapter and an existing expected entry of `2`. Its base value `1` mismatches and head value `2` matches without calling the normal `SnapshotClient.match` path; simply instrumenting that method would miss the oracle read and mismatch binding.
 
 Install environment probes before `SnapshotState.create`. The inspected 4.1.12 implementation uses `readSnapshotFile`; raw-file matching also calls it before `match`. Continue hashing actual bytes rather than decoded strings, including absence. The 5.x `readSnapshotFileData` path requires a separate adapter for its returned data and file bytes. Do not assume a `readSnapshotFile` wrapper observes it; reject that path until its read contract is instrumented and tested. Keep save/remove write blocks even with update mode `none`, including obsolete entries.
 
@@ -114,7 +140,8 @@ The main remaining risks are private runner-source drift, duplicate module ident
 Opening the exact version requires all of the following:
 
 - Body-only failures qualify; fixture setup/teardown, hooks, cleanups, callbacks, assertion-count failures, late errors and import/runtime errors do not. Cover no/unused/auto fixtures, dependency chains, overrides, test/file/worker scopes, concurrency, soft and async assertions, timeout and cancellation. Missing instrumentation always rejects.
-- Snapshot reads, unique full names, ordered keys and expected serializations retain parity. Switched files/entries, added external snapshots, duplicate names, early property mismatch, non-UTF-8 raw files, missing files and write attempts fail for the right reason.
+- Worker teardown failures reject in both pools even when `onTestRunEnd`, close guards, stderr and the exit code indicate success. Require a readable, empty post-close and pre-receipt error collection; error-filter callbacks, missing checkpoints and incomplete close reject. Clean worker-fixture red/green controls must still qualify.
+- Snapshot reads, unique full names, ordered keys and expected serializations retain parity. Switched files/entries, added external snapshots, duplicate names, early property mismatch, non-UTF-8 raw files, missing files and write attempts fail for the right reason. Domain and polling matchers reject until their separate entry points are instrumented.
 - Re-run the existing real-runner regressions rather than translating only happy paths. The 0.2.0 reviews require root globalSetup rejection, late-close error capture, live Error provenance, effective harness identity (including external inputs), unchanged Vite filesystem policy, copied dependency isolation, Python independence, clean execution copies, shipped-artifact path scans and timeout cleanup. Preserve the documented limit for unreported plugin filesystem reads. The later action reviews also require branch/tag disambiguation and leading-dash branch rejection.
 - Verify the matrix below with real red/green proofs, installed wheel and source execution, npm and pnpm isolated/hoisted/workspace layouts. Run the 3.2.x regression matrix separately so the new adapter cannot weaken existing support.
 - Require independent review with zero remaining false-PASS findings. Upgrade the refusal tests to behavioral assertions only in the change that enables the adapter; keep rejection tests for every other 4.x and all 5.x versions.
@@ -129,7 +156,7 @@ Every cell is a required acceptance run, not a claim that this phase tested supp
 | Vite 7.3.7 | Required | Required | Required |
 | Vite 8.3.5 | Required | Required | Required |
 
-Each cell covers forks and threads, genuine assertion and snapshot red/green controls, lifecycle refusals, config identity, dependency isolation and cleanup. The baseline remains Vitest 3.2.4/3.2.7 with Vite 6.3.5/6.4.5/7.3.7. This phase establishes only 4.1.12 refusal and the body-boundary experiment on the pinned Vite 7.3.7 tooling.
+Each cell covers forks and threads, genuine assertion and snapshot red/green controls, lifecycle refusals, config identity, dependency isolation and cleanup. The baseline remains Vitest 3.2.4/3.2.7 with Vite 6.3.5/6.4.5/7.3.7. This phase establishes only 4.1.12 refusal and the body-boundary and post-close error experiments on the pinned Vite 7.3.7 tooling.
 
 ## Source pointers
 
