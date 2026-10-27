@@ -21,16 +21,16 @@ dv prove: PASS
 Assertion-only red failure and executed green pass.
 ```
 
-[安装](#快速开始一条命令验证回归) · [GitHub Actions](#github-actions) · [真实项目示例](#真实项目phoenix-试跑) · [English](README.md)
+[安装](#快速开始一条命令验证回归) · [GitHub Actions](#github-actions) · [真实项目示例](#真实项目phoenix-回归证明) · [English](README.md)
 
 ## 快速开始：一条命令验证回归
 
 准备带 `venv` 和 `pip` 的 Python 3.10–3.13、Git 2.38+ 及 Linux/macOS。部分 Linux 发行版需单独安装 venv 系统包，例如 `python3-venv`。
 
-用 [pipx](https://pipx.pypa.io/latest/how-to/install-pipx.html) 安装 **GitHub Release v0.3.0 的 wheel**：
+用 [pipx](https://pipx.pypa.io/latest/how-to/install-pipx.html) 安装 **GitHub Release v0.3.1 的 wheel**：
 
 ```sh
-pipx install https://github.com/clean99/delivery-verifier/releases/download/v0.3.0/delivery_verifier-0.3.0-py3-none-any.whl
+pipx install https://github.com/clean99/delivery-verifier/releases/download/v0.3.1/delivery_verifier-0.3.1-py3-none-any.whl
 pipx ensurepath
 ```
 
@@ -106,29 +106,32 @@ prove: PASS
 
 Red 退出码为 1，断言报错为 `AssertionError: Lists differ: ['red', '', '', 'green'] != ['red', 'green']`；green 退出码为 0，一个测试通过。CLI 打印的证据目录保存 `proof.json`、`red.log` 和 `green.log`。首屏摘要也来自这次运行。
 
-## 真实项目：Phoenix 试跑
+## 真实项目：Phoenix 回归证明
 
-**已试跑，当前受阻。** [Phoenix #17270](https://github.com/Arize-ai/phoenix/pull/17270) 由 clean99 提交，2026-10-26 合入，修复保存的 prompt 转成 SDK 参数时丢失 `extra_body` 的问题。新增 pytest 方法覆盖 metadata、采样参数覆盖和空值处理。选择它的原因是 dv 已支持 pytest。
+**真实上游修复的回归证明已通过。** [Phoenix #17270](https://github.com/Arize-ai/phoenix/pull/17270) 由 clean99 提交，2026-10-26 合入，修复保存的 prompt 转成 SDK 参数时丢失 `extra_body` 的问题。新增 pytest 方法覆盖 metadata、采样参数覆盖和空值处理。
 
-2026-10-27 使用 **0.3.1 开发源码** `f1aa32811bcee8f27c3035cd44c797e684a2478e` 重新安装并试跑。两个阶段均已执行，`dv prove` **退出码为 1**。实际输出节选：
+2026-10-28 在 macOS、Python **3.12.13** 上复跑，使用从源码安装的 dv **0.3.1**，代码对应 `60b309e41bcd7e75fac876063e27b303782ef016`。`dv prove` **退出码为 0**，实际输出如下，仅替换本机证据路径：
 
 ```text
-prove: FAIL
+prove: PASS
+HEAD deb0731a4606b77c786d86953301ecca39916829 base abbfa7bd3ecc5c82cd17c112713f972b0052db4e
+Committed snapshots only; not a security sandbox or delivery approval.
+Evidence: <evidence-dir>
+hygiene: not_requested
+review: not_requested
 [PASS] red assertion: pytest: red failed at assertions with no runner errors
-[FAIL] green execution: pytest: complete=False, tests={'executed': 6, 'passed': 6, 'failed': 0, 'skipped': 0}; requires a normal exit 0 and at least one passed test body, with no errors
-  Next: Correct the finding and rerun this check.
+[PASS] green execution: pytest: complete=True, tests={'executed': 6, 'passed': 6, 'failed': 0, 'skipped': 0, 'xpassed': 0, 'xfailed': 0, 'errors': 0}; requires a normal exit 0 and at least one passed test body, with no errors
 ```
 
-在父提交 `abbfa7bd` 上，保留的测试在 `assert kwargs.get("extra_body") == expected_extra_body` 处失败：旧代码丢弃保存的 `extra_body`，使 metadata 和采样参数覆盖丢失。Red 退出码为 1，**3 个失败、3 个通过**。在合并提交 `deb0731a` 上，green 退出码为 0，**6 个通过**。两个阶段各有 **2 条警告**，来自未使用的 asyncio 配置。
+在父提交 `abbfa7bd` 上，保留的测试在 `assert kwargs.get("extra_body") == expected_extra_body` 处失败，原因是旧代码丢弃保存的 `extra_body`，使 metadata 和采样参数覆盖丢失；red 退出码为 **1**，**3 个失败、3 个通过**。
+在合并提交 `deb0731a` 上，green 退出码为 **0**，**6 个通过**。
 
-Green 日志以 `6 passed, 2 warnings in 1.06s` 结束，阶段探针也报告 `complete: true`。dv 的 pytest 汇总解析器尚未接受警告计数，因此记录 `complete=False` 并拒绝这次证明。Green 测试已通过，dv 证明仍受阻。
-
-此前 v0.3.0 wheel 在执行前被已跟踪的符号链接 `js/packages/phoenix-cli/test/fixtures/llms.txt` 阻断。开发源码已消除这一阻塞，符号链接校验保持启用，上游文件保持原样。上方成功演示仍采用合成示例。
+两个阶段各有 **2 条警告**，来自未使用的 asyncio 配置，green 执行记录完整并获接受。已跟踪的测试辅助符号链接和上游文件均保持原样。
 
 <details>
-<summary>复现这次上游试跑</summary>
+<summary>复现这次上游回归证明</summary>
 
-将 `<clone>` 和 `<venv>` 替换为两个独立的新目录，`<checkout>` 替换为 dv 源码目录，版本固定在 `fix/unchanged-test-symlinks` 分支的 `f1aa32811bcee8f27c3035cd44c797e684a2478e`。命令固定 Phoenix 合并提交及其父提交，只安装 Python 客户端和所选测试模块的依赖，省去 Phoenix 服务端和 JavaScript workspace。实测在 macOS 上使用 Python 3.12.13，按下方 pip 命令安装到全新虚拟环境。
+将 `<clone>` 和 `<venv>` 替换为两个独立的新目录。下方命令固定 Phoenix 合并提交及其父提交，并安装 v0.3.1 发布 wheel；项目依赖仅需 Python 客户端和所选测试模块的依赖。实测使用相同的包和全新虚拟环境，安装 dv 时将 wheel URL 换成了上文对应的本地源码。
 
 ```sh
 git clone --no-checkout --depth 1 https://github.com/Arize-ai/phoenix.git "<clone>"
@@ -138,7 +141,7 @@ git -C "<clone>" checkout --detach deb0731a4606b77c786d86953301ecca39916829
 python3.12 -m venv "<venv>"
 . "<venv>/bin/activate"
 python -m pip install --index-url https://pypi.org/simple \
-  "<checkout>" \
+  https://github.com/clean99/delivery-verifier/releases/download/v0.3.1/delivery_verifier-0.3.1-py3-none-any.whl \
   "<clone>/packages/phoenix-client" pytest==8.4.2 deepdiff==8.6.2 Faker==33.3.1
 cd "<clone>"
 unset PYTHONPATH
@@ -149,7 +152,7 @@ dv prove \
   --test "python -m pytest -c packages/phoenix-client/pyproject.toml -o pythonpath=src --tb=long packages/phoenix-client/tests/canary/sdk/anthropic/test_messages.py::TestToChatMessagesAndKwargs::test_extra_body_is_preserved"
 ```
 
-`-c` 选择客户端配置，`-o pythonpath=src` 让测试从各阶段快照导入源码。该转换测试无需服务或模型请求，因此关闭插件自动加载，相应的 asyncio 配置警告保留在日志中。dv 打印的证据目录包含 `proof.json`、`red.log` 和 `green.log`，其中保留了未获接受的 green 执行记录。
+`-c` 选择客户端配置，`-o pythonpath=src` 让测试从各阶段快照导入源码。该转换测试无需服务或模型请求，因此关闭插件自动加载，相应的 asyncio 配置警告保留在日志中。dv 打印的证据目录包含 `proof.json`、`red.log` 和 `green.log`，其中保留了获接受的 green 执行记录。
 
 其余候选的运行器超出当前支持范围：Phoenix [#17253](https://github.com/Arize-ai/phoenix/pull/17253)／[#17246](https://github.com/Arize-ai/phoenix/pull/17246) 和 assistant-ui [#10111](https://github.com/assistant-ui/assistant-ui/pull/10111) 声明使用 Vitest 5；React Hook Form [#13950](https://github.com/react-hook-form/react-hook-form/pull/13950) 使用 Jest。这些结论来自配置检查。上游克隆保留其许可证和声明，本仓库仅提供复现命令。
 
@@ -175,7 +178,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install pytest==8.4.2
-      - uses: clean99/delivery-verifier@v0.3.0
+      - uses: clean99/delivery-verifier@v0.3.1
         with:
           test: python -m pytest --tb=long tests/test_words.py
 ```
@@ -198,7 +201,7 @@ jobs:
         with:
           node-version: '20'
       - run: npm ci
-      - uses: clean99/delivery-verifier@v0.3.0
+      - uses: clean99/delivery-verifier@v0.3.1
         with:
           test: npx vitest run tests/words.test.js
 ```
@@ -209,7 +212,7 @@ jobs:
 | --- | --- | --- |
 | `test` | 必填 | 直接调用受支持的运行器，按参数数组解析，保留原有 shell 展开限制。 |
 | `base` | `pull_request` 的目标分支，其他事件使用仓库默认分支 | 从 `origin` 拉取的分支，例如 `main`、`release/topic` 或 `refs/heads/main`。短名称始终按 `refs/heads/` 解析，同名 tag 不影响选择。输入范围仅限分支，排除 tag、commit ID 和远程跟踪别名。证明基线为该分支与检出 `HEAD` 的合并基点，分支缺失时失败。 |
-| `version` | `local` | 用 pipx 从 action 自身的源码目录安装，与固定的 action commit 一致。显式填写 `0.3.0` 或 `v0.3.0` 等发布版本时，改为安装对应的 GitHub Release wheel。 |
+| `version` | `local` | 用 pipx 从 action 自身的源码目录安装，与固定的 action commit 一致。显式填写 `0.3.1` 或 `v0.3.1` 等发布版本时，改为安装对应的 GitHub Release wheel。 |
 | `timeout` | `1800` | 每个 red/green 阶段的超时秒数，取正整数。 |
 | `working-directory` | `.` | Git 仓库根目录，相对于 `GITHUB_WORKSPACE`，也可传绝对路径。测试从此根目录运行，测试路径按仓库根目录填写。 |
 
@@ -232,6 +235,8 @@ Linux/macOS 上沿用现有运行器契约和证明范围。Worktree 只隔离�
 ## 回归命令：按运行器核对断言
 
 工作项流程的 `test_runner` 默认为 `auto`，识别直接调用的 `python -m unittest`、`python -m pytest` / `pytest` 和 `node --test`。**Vitest 仅通过 `dv prove` 支持**，识别 `vitest`、`npx vitest`、`pnpm vitest` 及 `pnpm exec vitest`。工作项的 `redgreen` 和对应证据 gate 会拒绝 Vitest，并提示使用 `dv prove`。两个阶段使用相同的测试命令。直接调用 Python 运行器时，`dv` 会接入内置的阶段探针：unittest 使用启动器，pytest 使用插件，继续沿用命令指定的解释器及已安装的运行器。探针将 `DV-RUNNER-PHASES` 记录写入日志，运行时依赖保持不变。Red 必须退出 1，并输出完整的断言失败报告：
+
+Pytest 的 green 判定以探针读取的报告对象为准，允许通过的测试带有 warning，也支持 `-qq` 和 `-p no:terminal`。XPASS 和错误数必须为零。探针将本轮报告写到 checkout 外的临时文件，同时通过继承的管道发送原始内容的摘要。`dv` 校验摘要后将日志记录与执行阶段绑定，测试打印、缺失或随后被改写的报告均按证据异常处理。探针与 pytest 插件仍共享同一受信任进程，插件直接修改探针本身属于现有信任边界之外的行为。Red 仍需保留下表要求的堆栈和汇总。
 
 | 运行器 | Red 输出要求 |
 | --- | --- |
@@ -290,7 +295,7 @@ Jest、裸脚本、隐藏堆栈等暂不支持的报告格式会验证失败。�
 按官方指引[安装 uv](https://docs.astral.sh/uv/getting-started/installation/)，再安装同一份 wheel：
 
 ```sh
-uv tool install https://github.com/clean99/delivery-verifier/releases/download/v0.3.0/delivery_verifier-0.3.0-py3-none-any.whl
+uv tool install https://github.com/clean99/delivery-verifier/releases/download/v0.3.1/delivery_verifier-0.3.1-py3-none-any.whl
 uv tool update-shell
 ```
 
@@ -303,7 +308,7 @@ uv tool update-shell
 ```sh
 python3 -m venv .venv
 . .venv/bin/activate
-python -m pip install https://github.com/clean99/delivery-verifier/releases/download/v0.3.0/delivery_verifier-0.3.0-py3-none-any.whl
+python -m pip install https://github.com/clean99/delivery-verifier/releases/download/v0.3.1/delivery_verifier-0.3.1-py3-none-any.whl
 dv --version
 dv prove --help
 ```
@@ -312,13 +317,13 @@ dv prove --help
 
 ### Git tag：安装固定版本
 
-通过 v0.3.0 tag 安装对应源码：
+通过 v0.3.1 tag 安装对应源码：
 
 ```sh
-pipx install "delivery-verifier @ git+https://github.com/clean99/delivery-verifier.git@v0.3.0"
+pipx install "delivery-verifier @ git+https://github.com/clean99/delivery-verifier.git@v0.3.1"
 ```
 
-Release 也提供源码归档 [`delivery_verifier-0.3.0.tar.gz`](https://github.com/clean99/delivery-verifier/releases/download/v0.3.0/delivery_verifier-0.3.0.tar.gz)。源码安装在构建时需要 setuptools >=68，安装器通常会下载它；离线安装需提前准备构建工具。Wheel 可直接安装。安装后的运行时依赖是 Python 标准库和本地 Git。
+Release 也提供源码归档 [`delivery_verifier-0.3.1.tar.gz`](https://github.com/clean99/delivery-verifier/releases/download/v0.3.1/delivery_verifier-0.3.1.tar.gz)。源码安装在构建时需要 setuptools >=68，安装器通常会下载它；离线安装需提前准备构建工具。Wheel 可直接安装。安装后的运行时依赖是 Python 标准库和本地 Git。
 
 ### 本地源码：用于开发贡献
 

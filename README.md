@@ -27,10 +27,10 @@ Assertion-only red failure and executed green pass.
 
 Requirements: Python 3.10–3.13 with `venv` and `pip`, Git 2.38+, Linux/macOS. Some Linux distributions package `venv` separately (for example, `python3-venv`).
 
-Install the **v0.3.0 GitHub Release wheel** with [pipx](https://pipx.pypa.io/latest/how-to/install-pipx.html):
+Install the **v0.3.1 GitHub Release wheel** with [pipx](https://pipx.pypa.io/latest/how-to/install-pipx.html):
 
 ```sh
-pipx install https://github.com/clean99/delivery-verifier/releases/download/v0.3.0/delivery_verifier-0.3.0-py3-none-any.whl
+pipx install https://github.com/clean99/delivery-verifier/releases/download/v0.3.1/delivery_verifier-0.3.1-py3-none-any.whl
 pipx ensurepath
 ```
 
@@ -108,27 +108,30 @@ Red exited 1 with `AssertionError: Lists differ: ['red', '', '', 'green'] != ['r
 
 ## Real-world example
 
-**Attempted, currently blocked.** [Phoenix #17270](https://github.com/Arize-ai/phoenix/pull/17270), authored by clean99 and merged on 2026-10-26, preserves `extra_body` when converting a saved prompt to SDK arguments. Its pytest regression method covers metadata, sampling overrides and empty values. We chose it because pytest is supported.
+**PASS on a real upstream fix.** [Phoenix #17270](https://github.com/Arize-ai/phoenix/pull/17270), authored by clean99 and merged on 2026-10-26, preserves `extra_body` when converting a saved prompt to SDK arguments. Its pytest regression method covers metadata, sampling overrides and empty values.
 
-A rerun on 2026-10-27 installed dv from the **0.3.1 development checkout** at `f1aa32811bcee8f27c3035cd44c797e684a2478e`, rather than a release wheel. Both phases ran, but `dv prove` exited **1**. Actual output excerpts:
+The 2026-10-28 rerun used dv **0.3.1 installed from source**, with the code at `60b309e41bcd7e75fac876063e27b303782ef016`, on macOS with Python **3.12.13**. `dv prove` exited **0**. Actual output, with only the machine-specific evidence path replaced:
 
 ```text
-prove: FAIL
+prove: PASS
+HEAD deb0731a4606b77c786d86953301ecca39916829 base abbfa7bd3ecc5c82cd17c112713f972b0052db4e
+Committed snapshots only; not a security sandbox or delivery approval.
+Evidence: <evidence-dir>
+hygiene: not_requested
+review: not_requested
 [PASS] red assertion: pytest: red failed at assertions with no runner errors
-[FAIL] green execution: pytest: complete=False, tests={'executed': 6, 'passed': 6, 'failed': 0, 'skipped': 0}; requires a normal exit 0 and at least one passed test body, with no errors
-  Next: Correct the finding and rerun this check.
+[PASS] green execution: pytest: complete=True, tests={'executed': 6, 'passed': 6, 'failed': 0, 'skipped': 0, 'xpassed': 0, 'xfailed': 0, 'errors': 0}; requires a normal exit 0 and at least one passed test body, with no errors
 ```
 
-On parent `abbfa7bd`, the retained test failed at `assert kwargs.get("extra_body") == expected_extra_body`: the old code drops stored `extra_body`, losing metadata and sampling overrides. Red exited 1 with **3 failed and 3 passed**. On merge commit `deb0731a`, green exited 0 with **6 passed**. Each phase also reported **2 warnings** about unused asyncio settings.
+On parent `abbfa7bd`, the retained test failed at `assert kwargs.get("extra_body") == expected_extra_body` because the old code drops stored `extra_body`, losing metadata and sampling overrides: red exited **1**, with **3 failed and 3 passed**.
+On merge commit `deb0731a`, green exited **0**, with **6 passed**.
 
-The green log ends with `6 passed, 2 warnings in 1.06s`, and the phase probe reports `complete: true`. dv's pytest summary parser does not accept the warning count, so it records `complete=False` and rejects the proof. This remains a blocked dv demonstration, despite the passing green tests.
-
-The v0.3.0 wheel previously stopped before either phase on the tracked symlink `js/packages/phoenix-cli/test/fixtures/llms.txt`. The development checkout clears that blocker with its symlink validation enabled. No upstream files were edited; the successful demonstration above remains explicitly synthetic.
+Each phase reported **2 warnings** about unused asyncio settings; the green receipt was complete and accepted. The tracked test-support symlink remained intact, and no upstream files were edited.
 
 <details>
-<summary>Reproduce the upstream attempt</summary>
+<summary>Reproduce the upstream proof</summary>
 
-Replace `<clone>` and `<venv>` with separate new directories, and `<checkout>` with a dv checkout at `f1aa32811bcee8f27c3035cd44c797e684a2478e` (`fix/unchanged-test-symlinks`). This pins the Phoenix merge commit and its parent. Install only the Python client and the selected test module's dependencies; the Phoenix server and JavaScript workspace are not needed. The recorded run used Python 3.12.13 on macOS and the pip command below in a fresh virtual environment.
+Replace `<clone>` and `<venv>` with separate new directories. These commands pin the Phoenix merge commit and its parent and install the v0.3.1 release wheel. Only the Python client and the selected test module's dependencies are needed. The recorded run used the same packages in a fresh virtual environment, with the local dv source above in place of the wheel URL.
 
 ```sh
 git clone --no-checkout --depth 1 https://github.com/Arize-ai/phoenix.git "<clone>"
@@ -138,7 +141,7 @@ git -C "<clone>" checkout --detach deb0731a4606b77c786d86953301ecca39916829
 python3.12 -m venv "<venv>"
 . "<venv>/bin/activate"
 python -m pip install --index-url https://pypi.org/simple \
-  "<checkout>" \
+  https://github.com/clean99/delivery-verifier/releases/download/v0.3.1/delivery_verifier-0.3.1-py3-none-any.whl \
   "<clone>/packages/phoenix-client" pytest==8.4.2 deepdiff==8.6.2 Faker==33.3.1
 cd "<clone>"
 unset PYTHONPATH
@@ -149,7 +152,7 @@ dv prove \
   --test "python -m pytest -c packages/phoenix-client/pyproject.toml -o pythonpath=src --tb=long packages/phoenix-client/tests/canary/sdk/anthropic/test_messages.py::TestToChatMessagesAndKwargs::test_extra_body_is_preserved"
 ```
 
-`-c` selects the client configuration; `-o pythonpath=src` imports from each execution snapshot rather than the installed client copy. Plugin autoload is disabled because this conversion test needs no service or provider calls. The resulting asyncio configuration warnings remain in the logs. The evidence directory printed by dv contains `proof.json`, `red.log` and `green.log`, including the rejected green receipt.
+`-c` selects the client configuration; `-o pythonpath=src` imports from each execution snapshot rather than the installed client copy. Plugin autoload is disabled because this conversion test needs no service or provider calls. The resulting asyncio configuration warnings remain in the logs. The evidence directory printed by dv contains `proof.json`, `red.log` and `green.log`, including the accepted green receipt.
 
 The other supplied candidates do not fit the current runner contract: Phoenix [#17253](https://github.com/Arize-ai/phoenix/pull/17253) / [#17246](https://github.com/Arize-ai/phoenix/pull/17246) and assistant-ui [#10111](https://github.com/assistant-ui/assistant-ui/pull/10111) declare Vitest 5; React Hook Form [#13950](https://github.com/react-hook-form/react-hook-form/pull/13950) uses Jest. These were configuration checks, not successful dv runs. The upstream clone retains its own license and notices; no upstream source is copied here.
 
@@ -175,7 +178,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install pytest==8.4.2
-      - uses: clean99/delivery-verifier@v0.3.0
+      - uses: clean99/delivery-verifier@v0.3.1
         with:
           test: python -m pytest --tb=long tests/test_words.py
 ```
@@ -198,7 +201,7 @@ jobs:
         with:
           node-version: '20'
       - run: npm ci
-      - uses: clean99/delivery-verifier@v0.3.0
+      - uses: clean99/delivery-verifier@v0.3.1
         with:
           test: npx vitest run tests/words.test.js
 ```
@@ -209,7 +212,7 @@ Pinning the action to a reviewed full commit SHA is the most locked-down option.
 | --- | --- | --- |
 | `test` | Required | Direct supported runner command, split as argv without shell expansion. |
 | `base` | PR base branch on `pull_request`, repository default branch otherwise | Branch fetched from `origin`, such as `main`, `release/topic` or `refs/heads/main`. Short names always select `refs/heads/`, never a same-named tag. Tags, commit IDs and remote-tracking aliases are not supported. The proof uses the branch's merge base with checked-out `HEAD`; a missing branch fails. |
-| `version` | `local` | Install with pipx from the action's own source at the same pinned commit. An explicit release version, such as `0.3.0` or `v0.3.0`, installs its GitHub Release wheel instead. |
+| `version` | `local` | Install with pipx from the action's own source at the same pinned commit. An explicit release version, such as `0.3.1` or `v0.3.1`, installs its GitHub Release wheel instead. |
 | `timeout` | `1800` | Positive integer seconds per red/green phase. |
 | `working-directory` | `.` | Git repository root, relative to `GITHUB_WORKSPACE` or absolute. Tests run from this root; use repository-relative test paths. |
 
@@ -232,6 +235,8 @@ Dependency copies use APFS clones or Linux reflinks where supported; fallback co
 ## Focused runner contract
 
 `test_runner` defaults to `auto`, detecting direct `python -m unittest`, `python -m pytest` / `pytest`, and `node --test` commands for the item workflow. **Vitest is supported only through `dv prove`**, which detects `vitest`, `npx vitest`, `pnpm vitest` and `pnpm exec vitest`. Item-based `redgreen` and its evidence gate reject Vitest with guidance to use `dv prove`. Both phases use the same recipe. For direct Python commands, `dv` adds its bundled phase probe: a unittest launcher or a pytest plugin, using the selected interpreter and installed runner. The probe adds a `DV-RUNNER-PHASES` record to the log without new runtime dependencies. Red must exit 1 and produce a complete assertion-only report:
+
+Pytest green validation uses the probe's report objects, not terminal summaries. It accepts passing runs with warnings, including `-qq` and `-p no:terminal`, while requiring zero XPASS and errors. The probe writes a per-run report outside the checkout and sends its digest through an inherited pipe before later hooks can rewrite the file. `dv` checks that receipt before binding the logged record to the phase. Printed, missing or subsequently rewritten records fail closed. The probe and pytest plugins still run in the same trusted process; this is not protection against plugins modifying the probe itself. Red still requires the tracebacks and summary below.
 
 | Runner | Required red output |
 | --- | --- |
@@ -290,7 +295,7 @@ Unsupported reporters, including Jest, bare scripts, and suppressed tracebacks f
 After [installing uv](https://docs.astral.sh/uv/getting-started/installation/), install the same release wheel:
 
 ```sh
-uv tool install https://github.com/clean99/delivery-verifier/releases/download/v0.3.0/delivery_verifier-0.3.0-py3-none-any.whl
+uv tool install https://github.com/clean99/delivery-verifier/releases/download/v0.3.1/delivery_verifier-0.3.1-py3-none-any.whl
 uv tool update-shell
 ```
 
@@ -303,7 +308,7 @@ This option needs neither pipx nor uv:
 ```sh
 python3 -m venv .venv
 . .venv/bin/activate
-python -m pip install https://github.com/clean99/delivery-verifier/releases/download/v0.3.0/delivery_verifier-0.3.0-py3-none-any.whl
+python -m pip install https://github.com/clean99/delivery-verifier/releases/download/v0.3.1/delivery_verifier-0.3.1-py3-none-any.whl
 dv --version
 dv prove --help
 ```
@@ -312,13 +317,13 @@ Keep this environment activated when changing into your project; activation puts
 
 ### Git tag
 
-Use the pinned v0.3.0 source tag instead of a moving branch:
+Use the pinned v0.3.1 source tag instead of a moving branch:
 
 ```sh
-pipx install "delivery-verifier @ git+https://github.com/clean99/delivery-verifier.git@v0.3.0"
+pipx install "delivery-verifier @ git+https://github.com/clean99/delivery-verifier.git@v0.3.1"
 ```
 
-The release also includes the source archive [`delivery_verifier-0.3.0.tar.gz`](https://github.com/clean99/delivery-verifier/releases/download/v0.3.0/delivery_verifier-0.3.0.tar.gz). Source installs need setuptools >=68 at build time, normally downloaded by the installer. Offline source installation needs locally available build tooling. The wheel needs no source build. Once installed, `dv` uses Python's standard library and your local Git executable.
+The release also includes the source archive [`delivery_verifier-0.3.1.tar.gz`](https://github.com/clean99/delivery-verifier/releases/download/v0.3.1/delivery_verifier-0.3.1.tar.gz). Source installs need setuptools >=68 at build time, normally downloaded by the installer. Offline source installation needs locally available build tooling. The wheel needs no source build. Once installed, `dv` uses Python's standard library and your local Git executable.
 
 ### From a local checkout (contributors)
 
