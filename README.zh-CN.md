@@ -1,14 +1,27 @@
 # delivery-verifier
 
-**`dv prove` 检查回归测试能否在撤去修复后失败、恢复修复后实际执行并通过。可选的交付关卡把评审和批准记录绑定到确切的提交。**
+**证明这条回归测试确实能抓到旧 bug。**
 
-面向需要交付编码 Agent 所写改动的开发者。在本机运行，适用于能执行命令的编码 Agent。
+保留新增测试，先运行旧代码，再运行修复后的代码：
 
-[English](README.md) · [设计与配置参考](docs/design.md)
+```sh
+dv prove --test "<command>"
+```
 
-![离线演示：拒绝空洞测试，证明有效回归，缺少人工批准时保持交付阻塞。](docs/assets/demo.gif)
+直接传入 unittest、pytest、node:test（TAP）或 Vitest **3.2.x** 命令。
 
-*动图节选虚构示例的真实 CLI 输出，调整停留时间方便阅读。示例使用模拟评审记录，保留人工批准这一步。*
+**GitHub Action 摘要**：由 Action 适配器在本地读取[下方合成示例](#合成示例验证连续空格)的证明结果生成，托管 CI 运行另行验证。
+
+```text
+dv prove: PASS
+
+- Red: pass (exit 1, normal)
+- Green: pass (exit 0, normal)
+
+Assertion-only red failure and executed green pass.
+```
+
+[安装](#快速开始一条命令验证回归) · [GitHub Actions](#github-actions) · [真实项目示例](#真实项目phoenix-试跑) · [English](README.md)
 
 ## 快速开始：一条命令验证回归
 
@@ -48,15 +61,94 @@ dv prove --test "vitest run tests/words.test.js"
 
 **Vitest 证明范围：** PASS 表示所选测试检测到了本次改动，业务模块是否修复仍需审查。插件读取而 Vite 未报告的文件也计入待验证改动，详见[运行器契约](#回归命令按运行器核对断言)。
 
-差异检查通过 `--hygiene` 开启；评审检查通过 `--require-review .dv/item.json` 开启，并读取下文工作项流程中已有的匹配评审。默认只执行指定的回归命令。完整测试套件、交付批准和旧 gate/hook 规则仍由工作项流程负责。
+## 合成示例：验证连续空格
 
-**执行范围是已提交快照。** 暂存、未暂存、未跟踪和已忽略的本地源码留在原处，执行目录只取已提交源码。Node TAP 和 Vitest 证明会把已安装的 Node 依赖复制到每阶段的独立副本；Python 证明保持原有依赖处理方式。验证策略（policy）读取已提交的 head。测试子进程会清除继承的 `GIT_*` 环境变量，让普通 Git 命令定位到执行 worktree，保留调用者的仓库和索引。执行 worktree 位于调用者仓库及其 `.git` 目录之外。每次尝试在 Git 管理目录的 `dv/proofs/` 下保存独立的 `proof.json`、`red.log` 和 `green.log`，命令结束后清理本次执行目录及缓存。CLI 会打印证据目录。失败和中断保留失败状态；遗留恢复记录需要按所列路径检查，避免全仓 worktree prune。
+这个教学示例将 `text.split(" ")` 改为 `text.split()`，断言连续空格应得到 `["red", "green"]`。它使用 Python 自带的 unittest，无需安装项目依赖。
 
-**当前边界：** 支持 unittest、pytest、Node TAP 和 Vitest 3.2.x；Jest、原生 Windows、submodule/LFS 还原及自动安装依赖暂不支持。Vitest 限用默认 runner 和 forks/threads pool，排除浏览器模式、自定义 runner/pool、全局 setup/teardown 和扩展测试 fixture。命令经 POSIX 参数切分后直接执行，shell 展开和管道需由调用者另行处理。依赖由用户准备；指向其他工作区的 editable install 会破坏源码隔离。Worktree 只隔离执行目录，**安全沙箱需另行准备**，命令仍拥有当前用户的文件和网络权限。日志保存在本机，可能包含敏感信息。证明通过说明所选测试区分了两份实现，完整覆盖和断言语义仍需人工判断。评审身份依赖如实声明。参见[可复跑手册](docs/handbook/green-tests.md)、[实现与验收状态](docs/design/first-usable-version.md)和[安全边界](SECURITY.md)。
+<details>
+<summary>在新目录中复现</summary>
 
-依赖优先使用 APFS clone 或 Linux reflink；不支持时先检查空间再完整复制，大型依赖树会更慢。
+按上文安装 dv，保持环境激活，将 `<example>` 替换为新目录。Git 提交使用你配置的作者身份。
 
-源码离线示例仍可通过 `python3 examples/demo/run.py` 运行，演示独立的工作项交付流程，并使用模拟评审记录。
+```sh
+git init -b main "<example>"
+cd "<example>"
+printf 'def split_words(text):\n    return text.split(" ")\n' > words.py
+git add words.py
+git commit -m "Handle single spaces"
+git switch -c fix-spaces
+
+printf 'def split_words(text):\n    return text.split()\n' > words.py
+mkdir tests
+cat > tests/test_words.py <<'PY'
+import unittest
+from words import split_words
+
+
+class WordTests(unittest.TestCase):
+    def test_repeated_spaces(self):
+        self.assertEqual(split_words("red   green"), ["red", "green"])
+PY
+git add words.py tests/test_words.py
+git commit -m "Split repeated spaces"
+dv prove --test "python -m unittest discover -s tests -p test_words.py -v"
+```
+
+</details>
+
+以下节选来自 macOS 上使用 **v0.3.0 发布 wheel**、Python **3.12.13** 的实际输出：
+
+```text
+prove: PASS
+[PASS] red assertion: unittest: red failed at assertions with no runner errors
+[PASS] green execution: unittest: complete=True, tests={'executed': 1, 'passed': 1, 'failed': 0, 'skipped': 0}; requires a normal exit 0 and at least one passed test body, with no errors
+```
+
+Red 退出码为 1，断言报错为 `AssertionError: Lists differ: ['red', '', '', 'green'] != ['red', 'green']`；green 退出码为 0，一个测试通过。CLI 打印的证据目录保存 `proof.json`、`red.log` 和 `green.log`。首屏摘要也来自这次运行。
+
+## 真实项目：Phoenix 试跑
+
+**已试跑，当前受阻。** [Phoenix #17270](https://github.com/Arize-ai/phoenix/pull/17270) 由 clean99 提交，2026-10-26 合入，修复保存的 prompt 转成 SDK 参数时丢失 `extra_body` 的问题。新增 pytest 方法覆盖 metadata、采样参数覆盖和空值处理。选择它的原因是 dv 已支持 pytest。
+
+使用 v0.3.0 发布 wheel 执行下方命令，**在两个阶段执行前退出，退出码为 2**：
+
+```text
+prove: FAIL
+[FAIL] proof: Retained tests must be regular files, not symlinks
+  Next: Correct the finding and rerun this check.
+```
+
+固定版本中，`js/packages/phoenix-cli/test/fixtures/llms.txt` 是已跟踪的符号链接。dv 会保留整个仓库的测试及辅助文件，范围包含本次 Python 测试之外的文件，目前要求这些文件为普通文件。单独运行 pytest 时，合并提交上的六个用例全部通过；这份结果只覆盖 head。上方成功演示因此明确采用合成示例。
+
+<details>
+<summary>复现这次上游试跑</summary>
+
+将 `<clone>` 和 `<venv>` 替换为两个独立的新目录。命令固定合并提交及其父提交，只安装 Python 客户端和所选测试模块的依赖，省去 Phoenix 服务端和 JavaScript workspace。实测使用 Python 3.12.13，并通过 `uv pip install --python "<venv>/bin/python"` 安装下列同一组包。
+
+```sh
+git clone --no-checkout --depth 1 https://github.com/Arize-ai/phoenix.git "<clone>"
+git -C "<clone>" fetch --depth 2 origin deb0731a4606b77c786d86953301ecca39916829
+git -C "<clone>" checkout --detach deb0731a4606b77c786d86953301ecca39916829
+
+python3.12 -m venv "<venv>"
+. "<venv>/bin/activate"
+python -m pip install --index-url https://pypi.org/simple \
+  https://github.com/clean99/delivery-verifier/releases/download/v0.3.0/delivery_verifier-0.3.0-py3-none-any.whl \
+  "<clone>/packages/phoenix-client" pytest==8.4.2 deepdiff==8.6.2 Faker==33.3.1
+cd "<clone>"
+unset PYTHONPATH
+export PYTEST_DISABLE_PLUGIN_AUTOLOAD=1
+dv prove \
+  --base abbfa7bd3ecc5c82cd17c112713f972b0052db4e \
+  --head deb0731a4606b77c786d86953301ecca39916829 \
+  --test "python -m pytest -c packages/phoenix-client/pyproject.toml -o pythonpath=src --tb=long packages/phoenix-client/tests/canary/sdk/anthropic/test_messages.py::TestToChatMessagesAndKwargs::test_extra_body_is_preserved"
+```
+
+`-c` 选择客户端配置，`-o pythonpath=src` 让测试从各阶段快照导入源码。该转换测试无需服务或模型请求，因此关闭插件自动加载。在 head 单独执行内层 pytest 命令得到 **6 个测试通过**，另有 **2 条警告**来自未使用的 asyncio 配置。上游文件保持原样，符号链接检查也保持启用。
+
+其余候选的运行器超出当前支持范围：Phoenix [#17253](https://github.com/Arize-ai/phoenix/pull/17253)／[#17246](https://github.com/Arize-ai/phoenix/pull/17246) 和 assistant-ui [#10111](https://github.com/assistant-ui/assistant-ui/pull/10111) 声明使用 Vitest 5；React Hook Form [#13950](https://github.com/react-hook-form/react-hook-form/pull/13950) 使用 Jest。这些结论来自配置检查。上游克隆保留其许可证和声明，本仓库仅提供复现命令。
+
+</details>
 
 ## GitHub Actions
 
@@ -122,35 +214,63 @@ Action 单独准备 Python 3.12 和 pipx 环境，保留测试命令原有的 Py
 
 Linux/macOS 上沿用现有运行器契约和证明范围。Worktree 只隔离执行目录，上传日志可能包含敏感信息。PR 代码应在一次性的托管 runner 上运行，权限设为只读，并与 secrets 隔离；`pull_request_target` 不适合执行不受信任的 PR 代码。启用前检查测试命令和 artifact 可见范围。完整测试、评审和批准继续单独执行。
 
-## 示例：检查连续空格的修复
+## 回归证明：执行范围与边界
 
-修复将 `text.split(" ")` 改为 `text.split()`。空洞测试只检查返回值存在：
+差异检查通过 `--hygiene` 开启；评审检查通过 `--require-review .dv/item.json` 开启，并读取下文工作项流程中已有的匹配评审。默认只执行指定的回归命令。完整测试套件、交付批准和旧 gate/hook 规则仍由工作项流程负责。
 
-```python
-self.assertIsNotNone(split_words("red   green"))
+**执行范围是已提交快照。** 暂存、未暂存、未跟踪和已忽略的本地源码留在原处，执行目录只取已提交源码。Node TAP 和 Vitest 证明会把已安装的 Node 依赖复制到每阶段的独立副本；Python 证明保持原有依赖处理方式。验证策略（policy）读取已提交的 head。测试子进程会清除继承的 `GIT_*` 环境变量，让普通 Git 命令定位到执行 worktree，保留调用者的仓库和索引。执行 worktree 位于调用者仓库及其 `.git` 目录之外。每次尝试在 Git 管理目录的 `dv/proofs/` 下保存独立的 `proof.json`、`red.log` 和 `green.log`，命令结束后清理本次执行目录及缓存。CLI 会打印证据目录。失败和中断保留失败状态；遗留恢复记录需要按所列路径检查，避免全仓 worktree prune。
+
+**当前边界：** 支持 unittest、pytest、Node TAP 和 Vitest 3.2.x；Jest、原生 Windows、submodule/LFS 还原及自动安装依赖暂不支持。Vitest 限用默认 runner 和 forks/threads pool，排除浏览器模式、自定义 runner/pool、全局 setup/teardown 和扩展测试 fixture。命令经 POSIX 参数切分后直接执行，shell 展开和管道需由调用者另行处理。依赖由用户准备；指向其他工作区的 editable install 会破坏源码隔离。Worktree 只隔离执行目录，**安全沙箱需另行准备**，命令仍拥有当前用户的文件和网络权限。日志保存在本机，可能包含敏感信息。证明通过说明所选测试区分了两份实现，完整覆盖和断言语义仍需人工判断。评审身份依赖如实声明。参见[可复跑手册](docs/handbook/green-tests.md)、[实现与验收状态](docs/design/first-usable-version.md)和[安全边界](SECURITY.md)。
+
+依赖优先使用 APFS clone 或 Linux reflink；不支持时先检查空间再完整复制，大型依赖树会更慢。
+
+## 回归命令：按运行器核对断言
+
+工作项流程的 `test_runner` 默认为 `auto`，识别直接调用的 `python -m unittest`、`python -m pytest` / `pytest` 和 `node --test`。**Vitest 仅通过 `dv prove` 支持**，识别 `vitest`、`npx vitest`、`pnpm vitest` 及 `pnpm exec vitest`。工作项的 `redgreen` 和对应证据 gate 会拒绝 Vitest，并提示使用 `dv prove`。两个阶段使用相同的测试命令。直接调用 Python 运行器时，`dv` 会接入内置的阶段探针：unittest 使用启动器，pytest 使用插件，继续沿用命令指定的解释器及已安装的运行器。探针将 `DV-RUNNER-PHASES` 记录写入日志，运行时依赖保持不变。Red 必须退出 1，并输出完整的断言失败报告：
+
+| 运行器 | Red 输出要求 |
+| --- | --- |
+| Python unittest | `FAILED (failures=N)` 中失败数大于零、错误数为零，每份失败堆栈均为 `AssertionError`。探针需确认每项失败发生在测试方法执行期间；`setUp`、`tearDown`、`addCleanup` 和 `addAsyncCleanup` 失败均会被拒绝。 |
+| pytest | 保留默认或完整堆栈（`--tb=long`）及汇总，失败数大于零，每项失败终止于 `AssertionError`，并有 call 阶段证据。排除 setup/teardown 阶段、用例收集错误及 unittest 生命周期失败，包括 pytest 将 unittest 生命周期失败标成 `FAILED` 的情况。short/line/隐藏堆栈格式暂不支持。 |
+| Node.js test runner | 使用 `node --test --test-reporter=tap`，`# fail` 大于零、cancelled 为零，根本失败均报告 `failureType: 'testCodeFailure'` 和 `code: 'ERR_ASSERTION'`。`subtestsFailed` 父项需有失败子项；汇总计入父测试，排除 suite 容器。 |
+| Vitest 3.2.x（仅 `prove`） | 内置 JSON reporter 与测试体探针共同提供证据。失败数大于零，最终错误与测试体错误一致，来源为真实 Chai/Node 断言实例或探针观察到的 Vitest 快照不匹配。改名的运行时错误、普通对象、文件或 suite 错误、生命周期错误、退出阶段错误、重试及预期失败测试均会被拒绝。 |
+
+Vitest 省略 `run` 时也只运行一次；显式 watch 模式及 reporter/output 覆盖参数会被拒绝。`-t watch`、`--testNamePattern dev` 等参数值按测试过滤条件处理。`dv` 在回归证明期间关闭 coverage，保留默认的可读报告。Reporter 检查根配置及所有 project 后，接入默认 runner 的内置子类；全局 setup/teardown 继续排除。版本检查接受 Vitest 3.2.x，验证使用 3.2.4，覆盖 Vite 6.3.5、6.4.5 和 7.3.7。Vite 版本由项目选择。
+
+Vitest 命令行只接受以下参数：
+
+| 用途 | 支持的参数 |
+| --- | --- |
+| 运行和全局 API | `run`、`--run`、`--globals`，后两项为无值开关 |
+| 测试选择 | 位置参数形式的文件过滤条件、`-t` / `--testNamePattern`、`--project` |
+| Worker 数量 | `--maxWorkers`、`--minWorkers` |
+| 仓库内路径 | `-c` / `--config`、`-r` / `--root`、`--dir` |
+
+带值选项支持独立参数和 `--option=value` 写法。其他参数在执行任一阶段前直接拒绝，包括 `--diff`、`--workspace`、watch 和 reporter 覆盖参数。路径必须位于仓库内，并改指向执行副本；测试名正则和 project 名保持字符串原值。
+
+`dv` 要求 Vite/Vitest 报告的测试输入在 red、green 中保持一致，包括配置文件、配置依赖、setup 文件、workspace 文件及可观察到的导入依赖，以及当前 mode、envDir 对应的 `.env`、`.env.local`、`.env.<mode>`、`.env.<mode>.local`。两阶段分别加载各自提交中的配置。仓库内外的输入都记录原始字节哈希和存在状态。仓库内使用相对路径，外部文件使用路径哈希和文件名标识，主目录与绝对路径前缀替换为占位符。PR 导致这些阶段输入变化、新增或删除时，证明直接失败。
+
+报告还对每个 project 解析后的完整测试配置，以及 Vite 环境、define 和模块解析设置按顶层字段计算哈希。执行目录内的路径统一处理，覆盖 RegExp 源码中的路径及转义形式。规范化时排除探针 reporter/runner 路径、缓存目录、API 端口和自动生成的 API／探针标识。报告只保存哈希，差异提示只列顶层字段名。配置值使用时间、随机数或变化中的进程状态计算时，两阶段结果不同就会使证明失败；无法规范化的配置对象同样拒绝。
+
+检查范围是 Vite/Vitest 报告的输入和最终解析出的配置，`dv` 保留程序原有的文件读取行为。插件或其他代码通过 `fs` 等方式读取、而 Vite 未报告的文件，计入本次待验证改动。例如，插件读取变更后的 `offset.dat` 并用它改写测试时，PASS 表示测试检测到了该文件改动；即使业务模块保持不变，也可能得到 PASS。文件读取结果若改变了最终解析配置，配置检查仍会拒绝这次证明。
+
+所有 runner 都从 head 保留 `tests/`、`test/`、`__tests__/`、`test-utils/`、`test_utils/`、`fixtures/`、`__mocks__/` 内的辅助文件及各级 `conftest.py`，并删除仅在 base 中存在的辅助文件。只改辅助文件不足以构成业务代码差异。导出期望值的 `helper.js` 等测试辅助代码应放在这些路径下；导入关系同时覆盖业务模块，因此文件用途按路径约定识别。
+
+支持内联快照和标准外部快照。`dv` 设置 `CI=true`，清除 `UPDATE_SNAPSHOT`，强制 `--update=false`，并拦截快照保存与删除操作。缺失快照或尝试写入都会让证明失败；触发 Vitest 重写的过时快照条目需先清理。Red 保留 head 的 `.snap`、`__snapshots__` 文件及测试。每次快照读取都要与 head 的原始文件字节及存在状态一致，包括 `toMatchFileSnapshot` 和自定义快照路径。同一测试在 red、green 中读取的仓库相对路径和哈希必须完全一致，实际消费的条目还要按顺序比对文件、条目键及期望序列化内容的哈希。使用快照的测试要求完整名称在同一文件、同一 project 内唯一，名称包含所属 suite。同名测试会使证明失败，跳过的同名项也计入检查。参数化测试应把用例值写进名称，例如 `test.each([0, 1])('value %s', ...)`。条目仍按顺序绑定；切换条目或只在一个阶段消费条目都会让证明失败，提示会指出具体测试和条目。探针依据真实 matcher 的返回结果识别快照不匹配，并在 soft assertion 序列化前判断断言类型。仅把错误改名为 `AssertionError` 会被拒绝。
+
+最终 JSON 在进程 exit 事件中同步写入，再以 `DV-VITEST-REPORT` 嵌入带哈希的日志。报告要求资源关闭完成、退出码一致，每个执行文件和测试均携带本次探针标识。晚到的异常或拒绝、退出阶段诊断及资源关闭失败均会使报告失效；exit listener 写入后发生的错误也会被拦截。Green 至少有一个测试实际执行并通过，且没有失败或运行器错误。`prove` 校验两份 Vitest 日志后再判定结果。
+
+先安装好测试依赖；`npx` 会增加 `--no-install`。所有 runner 的 proof worktree 都位于仓库和 `.git` 之外。`prove` 复制根目录及包内的 `node_modules`，把依赖和 workspace 链接改指向执行副本。复制会占用额外磁盘，但缓存不会经链接写回调用者的依赖。`node_modules` 中的已提交文件保持提交时的内容，其余依赖补入同一目录。Node runner 的仓库内启动器和明确的路径参数会改指向执行副本，包括 Vitest 文件过滤条件及 config/root/dir 路径；存在歧义时拒绝执行，并提示改用仓库相对路径。测试名正则、project 名等字符串参数保留原样，即使内容恰好与路径相同。Python 命令保留所选解释器和参数，支持仓库内虚拟环境及激活后的 PATH 启动器。全局工具安装保持外部路径，其自身缓存仍可能被写入。探针按次放在执行 checkout 之外的临时 Node 依赖目录，保持执行目录的 Git 状态干净，Git 排除规则和 Vite 文件访问设置保持原样。示例通过 `--globals` 使用 Vitest API：
+
+```sh
+python3 examples/vitest/run.py --vitest /path/to/tooling/node_modules/.bin/vitest
 ```
 
-两份实现都返回列表，所以测试都会通过，`dv redgreen` 拒绝这份证明。把断言换成具体结果：
+包装命令需显式指定 `test_runner`。Python 包装命令还需接入内置探针：unittest 用 `python -m dv._runner_probe`，pytest 用 `python -m pytest -p dv._runner_probe`，对应解释器中需能导入 `dv`。阶段记录缺失、不完整或有歧义时，回归证明失败。静态检查和完整测试沿用原命令。
 
-```python
-self.assertEqual(split_words("red   green"), ["red", "green"])
-```
+对 unittest，`dv` 将测试方法执行期间视为测试主体，包括方法调用的辅助函数和子测试，排除 `setUp`/`tearDown`、对应的异步方法及清理回调。对 pytest 测试函数，边界是 **call 阶段**，涵盖调用测试函数期间运行的全部代码，包括通过 `request.getfixturevalue()` 动态请求的 fixture，以及 `conftest.py` 中的 `pytest_runtest_call` 等 call 阶段 hook。这两处的断言失败同样计入测试主体失败，即使断言位于测试函数自身语句之外。Pytest 的 setup/teardown 阶段和用例收集错误均被排除；由 pytest 执行的 unittest 用例仍按测试方法边界判断。评审者应阅读 red 日志，核对断言来源及其是否证明了目标回归。
 
-现在，撤去修复时测试在断言处失败，恢复修复后通过：
-
-```text
-redgreen: FAIL (exit 1)
-  red=0, green=0
-Hollow test rejected: it passes even with the fix removed.
-
-redgreen: PASS (exit 0)
-  red=1, green=0
-Meaningful regression proved: red=1, green=0.
-```
-
-完整示例还会检查代码差异，并用**模拟评审记录**演示就绪关卡。最后的交付关卡因缺少人工批准而按预期失败。真实改动需要独立评审者检查，并由本人作出批准决定。
-
-关卡会重跑已配置的仓库检查，标出聚焦测试和调试语句等问题。提交或评审输入变化后，原证据失效。
+Jest、裸脚本、隐藏堆栈等暂不支持的报告格式会验证失败。静态检查和完整测试命令保持原有自由度。`red assertion` 单列断言验证结果：即使 green 通过，导入、运行、用例收集或 setup/teardown 阶段错误也会被拒绝。Gate 会重新解析已保存的日志。日志依赖本地命令如实输出。
 
 ## 同类工具：检查方式的区别
 
@@ -203,7 +323,11 @@ Release 也提供源码归档 [`delivery_verifier-0.3.0.tar.gz`](https://github.
 
 使用 `uv build` 构建分发包。构建后端将 sdist 所有者统一为 `0/root`，归档时间取 `SOURCE_DATE_EPOCH`，默认值为 UTC 2000-01-01。发布检查见[可复现构建](CONTRIBUTING.md#reproducible-builds)。
 
-## 验证层级：逐项保留证据
+## 可选流程：工作项与交付关卡
+
+需要把仓库检查、评审和人工批准绑定到提交时，再启用此流程。单独使用 `dv prove` 可直接跳过这些配置。
+
+### 验证层级：逐项保留证据
 
 | 层级 | 证据 | 检查方式 |
 | --- | --- | --- |
@@ -218,7 +342,43 @@ Release 也提供源码归档 [`delivery_verifier-0.3.0.tar.gz`](https://github.
 
 新提交或 amend 会让原证据失效。证据还绑定当前安装的检查器 Python 与内置 JavaScript 源码 SHA-256 摘要，涵盖版本定义和解析器。升级或修改检查器后，red/green、评审和批准均需重做；缺少此绑定的旧记录也需重新生成。合并基点、工作项设置、有效配置、交付文案或运行附件改变后，也要重新收集证据。评审改变后需要重新批准。每次运行 gate 都重新检查，磁盘上的旧 `gate.json` 仅供查看。
 
-## 可选流程：工作项与交付关卡
+### 合成交付关卡演示
+
+![离线演示：拒绝空洞测试，证明有效回归，缺少人工批准时保持交付阻塞。](docs/assets/demo.gif)
+
+*动图节选虚构示例的真实 CLI 输出，调整停留时间方便阅读。示例使用模拟评审记录，保留人工批准这一步。*
+
+源码离线示例仍可通过 `python3 examples/demo/run.py` 运行，演示独立的工作项交付流程，并使用模拟评审记录。
+
+修复将 `text.split(" ")` 改为 `text.split()`。空洞测试只检查返回值存在：
+
+```python
+self.assertIsNotNone(split_words("red   green"))
+```
+
+两份实现都返回列表，所以测试都会通过，`dv redgreen` 拒绝这份证明。把断言换成具体结果：
+
+```python
+self.assertEqual(split_words("red   green"), ["red", "green"])
+```
+
+现在，撤去修复时测试在断言处失败，恢复修复后通过：
+
+```text
+redgreen: FAIL (exit 1)
+  red=0, green=0
+Hollow test rejected: it passes even with the fix removed.
+
+redgreen: PASS (exit 0)
+  red=1, green=0
+Meaningful regression proved: red=1, green=0.
+```
+
+完整示例还会检查代码差异，并用**模拟评审记录**演示就绪关卡。最后的交付关卡因缺少人工批准而按预期失败。真实改动需要独立评审者检查，并由本人作出批准决定。
+
+关卡会重跑已配置的仓库检查，标出聚焦测试和调试语句等问题。提交或评审输入变化后，原证据失效。
+
+### 工作项配置
 
 仓库需要已有提交和本地基线分支，例如 `main`；在另一条分支上实现改动。自行准备依赖，并在 `.dv.toml` 中配置仓库真实使用的检查命令：
 
@@ -255,56 +415,6 @@ dv init --implementer model-a --base main
   "exceptions": {}
 }
 ```
-
-### 回归命令：按运行器核对断言
-
-工作项流程的 `test_runner` 默认为 `auto`，识别直接调用的 `python -m unittest`、`python -m pytest` / `pytest` 和 `node --test`。**Vitest 仅通过 `dv prove` 支持**，识别 `vitest`、`npx vitest`、`pnpm vitest` 及 `pnpm exec vitest`。工作项的 `redgreen` 和对应证据 gate 会拒绝 Vitest，并提示使用 `dv prove`。两个阶段使用相同的测试命令。直接调用 Python 运行器时，`dv` 会接入内置的阶段探针：unittest 使用启动器，pytest 使用插件，继续沿用命令指定的解释器及已安装的运行器。探针将 `DV-RUNNER-PHASES` 记录写入日志，运行时依赖保持不变。Red 必须退出 1，并输出完整的断言失败报告：
-
-Pytest 的 green 判定以探针读取的报告对象为准，允许通过的测试带有 warning，也支持 `-qq` 和 `-p no:terminal`。XPASS 和错误数必须为零。探针将本轮报告写到 checkout 外的临时文件，同时通过继承的管道发送原始内容的摘要。`dv` 校验摘要后将日志记录与执行阶段绑定，测试打印、缺失或随后被改写的报告均按证据异常处理。探针与 pytest 插件仍共享同一受信任进程，插件直接修改探针本身属于现有信任边界之外的行为。Red 仍需保留下表要求的堆栈和汇总。
-
-| 运行器 | Red 输出要求 |
-| --- | --- |
-| Python unittest | `FAILED (failures=N)` 中失败数大于零、错误数为零，每份失败堆栈均为 `AssertionError`。探针需确认每项失败发生在测试方法执行期间；`setUp`、`tearDown`、`addCleanup` 和 `addAsyncCleanup` 失败均会被拒绝。 |
-| pytest | 保留默认或完整堆栈（`--tb=long`）及汇总，失败数大于零，每项失败终止于 `AssertionError`，并有 call 阶段证据。排除 setup/teardown 阶段、用例收集错误及 unittest 生命周期失败，包括 pytest 将 unittest 生命周期失败标成 `FAILED` 的情况。short/line/隐藏堆栈格式暂不支持。 |
-| Node.js test runner | 使用 `node --test --test-reporter=tap`，`# fail` 大于零、cancelled 为零，根本失败均报告 `failureType: 'testCodeFailure'` 和 `code: 'ERR_ASSERTION'`。`subtestsFailed` 父项需有失败子项；汇总计入父测试，排除 suite 容器。 |
-| Vitest 3.2.x（仅 `prove`） | 内置 JSON reporter 与测试体探针共同提供证据。失败数大于零，最终错误与测试体错误一致，来源为真实 Chai/Node 断言实例或探针观察到的 Vitest 快照不匹配。改名的运行时错误、普通对象、文件或 suite 错误、生命周期错误、退出阶段错误、重试及预期失败测试均会被拒绝。 |
-
-Vitest 省略 `run` 时也只运行一次；显式 watch 模式及 reporter/output 覆盖参数会被拒绝。`-t watch`、`--testNamePattern dev` 等参数值按测试过滤条件处理。`dv` 在回归证明期间关闭 coverage，保留默认的可读报告。Reporter 检查根配置及所有 project 后，接入默认 runner 的内置子类；全局 setup/teardown 继续排除。版本检查接受 Vitest 3.2.x，验证使用 3.2.4，覆盖 Vite 6.3.5、6.4.5 和 7.3.7。Vite 版本由项目选择。
-
-Vitest 命令行只接受以下参数：
-
-| 用途 | 支持的参数 |
-| --- | --- |
-| 运行和全局 API | `run`、`--run`、`--globals`，后两项为无值开关 |
-| 测试选择 | 位置参数形式的文件过滤条件、`-t` / `--testNamePattern`、`--project` |
-| Worker 数量 | `--maxWorkers`、`--minWorkers` |
-| 仓库内路径 | `-c` / `--config`、`-r` / `--root`、`--dir` |
-
-带值选项支持独立参数和 `--option=value` 写法。其他参数在执行任一阶段前直接拒绝，包括 `--diff`、`--workspace`、watch 和 reporter 覆盖参数。路径必须位于仓库内，并改指向执行副本；测试名正则和 project 名保持字符串原值。
-
-`dv` 要求 Vite/Vitest 报告的测试输入在 red、green 中保持一致，包括配置文件、配置依赖、setup 文件、workspace 文件及可观察到的导入依赖，以及当前 mode、envDir 对应的 `.env`、`.env.local`、`.env.<mode>`、`.env.<mode>.local`。两阶段分别加载各自提交中的配置。仓库内外的输入都记录原始字节哈希和存在状态。仓库内使用相对路径，外部文件使用路径哈希和文件名标识，主目录与绝对路径前缀替换为占位符。PR 导致这些阶段输入变化、新增或删除时，证明直接失败。
-
-报告还对每个 project 解析后的完整测试配置，以及 Vite 环境、define 和模块解析设置按顶层字段计算哈希。执行目录内的路径统一处理，覆盖 RegExp 源码中的路径及转义形式。规范化时排除探针 reporter/runner 路径、缓存目录、API 端口和自动生成的 API／探针标识。报告只保存哈希，差异提示只列顶层字段名。配置值使用时间、随机数或变化中的进程状态计算时，两阶段结果不同就会使证明失败；无法规范化的配置对象同样拒绝。
-
-检查范围是 Vite/Vitest 报告的输入和最终解析出的配置，`dv` 保留程序原有的文件读取行为。插件或其他代码通过 `fs` 等方式读取、而 Vite 未报告的文件，计入本次待验证改动。例如，插件读取变更后的 `offset.dat` 并用它改写测试时，PASS 表示测试检测到了该文件改动；即使业务模块保持不变，也可能得到 PASS。文件读取结果若改变了最终解析配置，配置检查仍会拒绝这次证明。
-
-所有 runner 都从 head 保留 `tests/`、`test/`、`__tests__/`、`test-utils/`、`test_utils/`、`fixtures/`、`__mocks__/` 内的辅助文件及各级 `conftest.py`，并删除仅在 base 中存在的辅助文件。只改辅助文件不足以构成业务代码差异。导出期望值的 `helper.js` 等测试辅助代码应放在这些路径下；导入关系同时覆盖业务模块，因此文件用途按路径约定识别。
-
-支持内联快照和标准外部快照。`dv` 设置 `CI=true`，清除 `UPDATE_SNAPSHOT`，强制 `--update=false`，并拦截快照保存与删除操作。缺失快照或尝试写入都会让证明失败；触发 Vitest 重写的过时快照条目需先清理。Red 保留 head 的 `.snap`、`__snapshots__` 文件及测试。每次快照读取都要与 head 的原始文件字节及存在状态一致，包括 `toMatchFileSnapshot` 和自定义快照路径。同一测试在 red、green 中读取的仓库相对路径和哈希必须完全一致，实际消费的条目还要按顺序比对文件、条目键及期望序列化内容的哈希。使用快照的测试要求完整名称在同一文件、同一 project 内唯一，名称包含所属 suite。同名测试会使证明失败，跳过的同名项也计入检查。参数化测试应把用例值写进名称，例如 `test.each([0, 1])('value %s', ...)`。条目仍按顺序绑定；切换条目或只在一个阶段消费条目都会让证明失败，提示会指出具体测试和条目。探针依据真实 matcher 的返回结果识别快照不匹配，并在 soft assertion 序列化前判断断言类型。仅把错误改名为 `AssertionError` 会被拒绝。
-
-最终 JSON 在进程 exit 事件中同步写入，再以 `DV-VITEST-REPORT` 嵌入带哈希的日志。报告要求资源关闭完成、退出码一致，每个执行文件和测试均携带本次探针标识。晚到的异常或拒绝、退出阶段诊断及资源关闭失败均会使报告失效；exit listener 写入后发生的错误也会被拦截。Green 至少有一个测试实际执行并通过，且没有失败或运行器错误。`prove` 校验两份 Vitest 日志后再判定结果。
-
-先安装好测试依赖；`npx` 会增加 `--no-install`。所有 runner 的 proof worktree 都位于仓库和 `.git` 之外。`prove` 复制根目录及包内的 `node_modules`，把依赖和 workspace 链接改指向执行副本。复制会占用额外磁盘，但缓存不会经链接写回调用者的依赖。`node_modules` 中的已提交文件保持提交时的内容，其余依赖补入同一目录。Node runner 的仓库内启动器和明确的路径参数会改指向执行副本，包括 Vitest 文件过滤条件及 config/root/dir 路径；存在歧义时拒绝执行，并提示改用仓库相对路径。测试名正则、project 名等字符串参数保留原样，即使内容恰好与路径相同。Python 命令保留所选解释器和参数，支持仓库内虚拟环境及激活后的 PATH 启动器。全局工具安装保持外部路径，其自身缓存仍可能被写入。探针按次放在执行 checkout 之外的临时 Node 依赖目录，保持执行目录的 Git 状态干净，Git 排除规则和 Vite 文件访问设置保持原样。示例通过 `--globals` 使用 Vitest API：
-
-```sh
-python3 examples/vitest/run.py --vitest /path/to/tooling/node_modules/.bin/vitest
-```
-
-包装命令需显式指定 `test_runner`。Python 包装命令还需接入内置探针：unittest 用 `python -m dv._runner_probe`，pytest 用 `python -m pytest -p dv._runner_probe`，对应解释器中需能导入 `dv`。阶段记录缺失、不完整或有歧义时，回归证明失败。静态检查和完整测试沿用原命令。
-
-对 unittest，`dv` 将测试方法执行期间视为测试主体，包括方法调用的辅助函数和子测试，排除 `setUp`/`tearDown`、对应的异步方法及清理回调。对 pytest 测试函数，边界是 **call 阶段**，涵盖调用测试函数期间运行的全部代码，包括通过 `request.getfixturevalue()` 动态请求的 fixture，以及 `conftest.py` 中的 `pytest_runtest_call` 等 call 阶段 hook。这两处的断言失败同样计入测试主体失败，即使断言位于测试函数自身语句之外。Pytest 的 setup/teardown 阶段和用例收集错误均被排除；由 pytest 执行的 unittest 用例仍按测试方法边界判断。评审者应阅读 red 日志，核对断言来源及其是否证明了目标回归。
-
-Jest、裸脚本、隐藏堆栈等暂不支持的报告格式会验证失败。静态检查和完整测试命令保持原有自由度。`red assertion` 单列断言验证结果：即使 green 通过，导入、运行、用例收集或 setup/teardown 阶段错误也会被拒绝。Gate 会重新解析已保存的日志。日志依赖本地命令如实输出。
 
 路径均相对于仓库根目录。可选字段 `description_file` 指向已忽略的本地交付文案，例如 `.dv/description.txt`；`runtime_files` 指向已忽略的运行证据文件。多个工作项各用一个独立的忽略目录。
 
@@ -391,9 +501,7 @@ allow_commands = []
 
 - 实现修复、编写测试、调用模型、判断评审质量、核验评审者身份及决定批准。
 - 仓库发现、贡献政策调研、Issue 和 PR 管理、远程拉取、推送、发布、部署、CI 轮询及贡献台账。
-- 命令沙箱、完整秘密扫描、证据的密码学签名，以及判断断言是否验证了预期行为。
-
-`dv` 不提供安全沙箱。威胁模型要求防止空测试、因错误原因失败、未运行、跳过、XPASS 或运行出错的测试被误判为 PASS。通过普通测试输出、`conftest` 钩子或进程退出流程误报结果，也在检查范围内。刻意在进程内篡改 `dv` 自身的探针对象或私有管道，属于威胁模型范围之外。
+- 命令沙箱、完整秘密扫描、证据的密码学签名，以及核对测试是否因预期原因而失败。
 
 内部 Git 命令禁用 lazy fetch 和全部传输协议，缺失对象时直接失败，由用户自行准备本地对象。Partial clone 要求 Git 支持 `--no-lazy-fetch`，旧版本需使用完整本地克隆。
 
