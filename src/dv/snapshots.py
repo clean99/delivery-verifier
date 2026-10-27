@@ -67,6 +67,42 @@ def content(repo: Repo, entry: Entry) -> bytes:
     return data
 
 
+def retained_symlink_target(path, data, entries, directories):
+    destination = os.fsdecode(data)
+    if not destination or "\0" in destination:
+        raise DVError(f"Retained symlink has an invalid target: {path}", 2, "unsupported_path")
+    parts = list(Path(path).parent.parts)
+    if destination.startswith("/"):
+        raise DVError(f"Retained symlink escapes the snapshot: {path}", 2, "unsupported_path")
+    # Inspect each component before '..' can erase a symlink or a non-directory.
+    for component in destination.split("/"):
+        current = "/".join(parts)
+        if current and current not in directories:
+            raise DVError(
+                f"Retained symlink target traverses a non-directory: {path}", 2, "unsupported_path"
+            )
+        if component == "..":
+            if not parts:
+                raise DVError(
+                    f"Retained symlink escapes the snapshot: {path}", 2, "unsupported_path"
+                )
+            parts.pop()
+        elif component not in ("", "."):
+            parts.append(component)
+        entry = entries.get("/".join(parts))
+        if entry is not None and entry.mode == "120000":
+            raise DVError(
+                f"Retained symlink chain or loop is unsupported: {path}", 2, "unsupported_path"
+            )
+    target = "/".join(parts)
+    entry = entries.get(target)
+    if entry is None or entry.mode not in ("100644", "100755"):
+        raise DVError(
+            f"Retained symlink target must be a tracked regular file: {path}", 2, "unsupported_path"
+        )
+    return target
+
+
 def retained_inputs(repo, base, head, policy, explicit):
     for path in explicit:
         config.relative(path, "test file")
@@ -85,8 +121,22 @@ def retained_inputs(repo, base, head, policy, explicit):
             "test", "snapshot")
 
     retained = {path: entry for path, entry in head.items() if is_test(path)}
-    if any(entry.mode not in ("100644", "100755") for entry in retained.values()):
-        raise DVError("Retained tests must be regular files, not symlinks", 2, "unsupported_path")
+    symlinks = {
+        path for entries in (base, head) for path, entry in entries.items()
+        if is_test(path) and entry.mode == "120000"
+    }
+    for path in sorted(symlinks):
+        if base.get(path) != head.get(path):
+            if path not in base:
+                change = "added"
+            elif path not in head:
+                change = "deleted"
+            else:
+                change = "changed"
+            raise DVError(
+                f"Retained symlink was {change}; path, mode and target must be unchanged: {path}",
+                2, "unsupported_path",
+            )
     production = [
         path
         for path in base.keys() | head.keys()
@@ -111,8 +161,31 @@ def retained_inputs(repo, base, head, policy, explicit):
                             2,
                             "mixed_test_file",
                         )
-    red = {path: entry for path, entry in base.items() if not is_test(path)}
-    red.update(retained)
+    # Unchanged links stay native to base; only regular test files are overlaid.
+    red = {path: entry for path, entry in base.items() if not is_test(path) or path in symlinks}
+    red.update((path, entry) for path, entry in retained.items() if path not in symlinks)
+    if symlinks:
+        directories = [
+            {str(parent) for path in entries for parent in Path(path).parents}
+            for entries in (red, head)
+        ]
+        for path in sorted(symlinks):
+            data = content(repo, base[path])
+            targets = [
+                retained_symlink_target(path, data, entries, parents)
+                for entries, parents in zip((red, head), directories)
+            ]
+            target = targets[0]
+            if target in production:
+                raise DVError(
+                    f"Retained symlink points to a changed production file: {path} -> {target}",
+                    2, "unsupported_path",
+                )
+            if targets[1] != target or red[target] != head[target]:
+                raise DVError(
+                    f"Retained symlink target differs between snapshots: {path} -> {target}",
+                    2, "unsupported_path",
+                )
     # A retained file may not replace a production directory (or vice versa).
     for path in red:
         if any(str(parent) in red for parent in Path(path).parents if str(parent) != "."):

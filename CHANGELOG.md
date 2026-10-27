@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- `dv prove` accepts unchanged tracked test-support symlinks that directly resolve to regular files inside both snapshots with identical target bytes and modes. Keep these links from base instead of overlaying them from head. Added, deleted or changed links, escaping targets, chains, loops and links to changed production files still fail before either phase.
+
 ## 0.3.0 — 2026-10-27
 
 ### Added
