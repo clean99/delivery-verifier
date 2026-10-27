@@ -109,9 +109,19 @@ def parse_report(text: str) -> tuple[dict, bool, bool, str]:
         body = value.get("body")
         require(isinstance(body, dict) and body.get("nonce") == nonce,
                 "missing test-body probe activation")
-        require(body.get("fixtures") is False, "extended test fixtures are unsupported")
+        if version == "4.1.12":
+            require(body.get("task") == identifier and type(body.get("entered")) is int
+                    and body["entered"] == 1 and type(body.get("finished")) is int
+                    and body["finished"] == 1, "missing or incomplete test-body invocation")
+            require(body.get("pendingSnapshots") == 0, "unbound custom snapshot matcher result")
+        else:
+            require(body.get("fixtures") is False, "extended test fixtures are unsupported")
         body_errors = errors(body.get("errors"))
-        require([{key: error[key] for key in ("name", "message")} for error in body_errors]
+        keys = ("name", "message", "token") if version == "4.1.12" else ("name", "message")
+        if version == "4.1.12":
+            require(all(isinstance(error.get("token"), str) and error["token"]
+                        for error in body_errors), "missing live body-error token")
+        require([{key: error.get(key) for key in keys} for error in body_errors]
                 == failures, "errors outside the test body (hook, cleanup or callback)")
         counts["executed"] += 1
         if state == "pass":
@@ -132,10 +142,16 @@ def parse_report(text: str) -> tuple[dict, bool, bool, str]:
         require(record.get("schema_version") == 7 and record.get("runner") == "vitest",
                 "unsupported machine report schema")
         version = record.get("version")
-        require(isinstance(version, str) and re.fullmatch(r"3\.2\.\d+", version),
+        require(isinstance(version, str) and (re.fullmatch(r"3\.2\.\d+", version)
+                                             or version == "4.1.12"),
                 f"Unsupported Vitest version {version}; supported: 3.2.x")
         require(record.get("complete") is True,
                 str(record.get("error", "incomplete machine report")))
+        if version == "4.1.12":
+            require(record.get("sourceVerified") is True, "unverified Vitest 4.1.12 sources")
+            require(not errors(record.get("postCloseErrors")),
+                    "post-close Vitest error (file/suite or worker teardown)")
+            require(not errors(record.get("finalErrors")), "final Vitest error")
         require(record.get("shutdownComplete") is True, "shutdown did not complete")
         require(not errors(record.get("lateErrors")), "late process or shutdown error")
         require(record.get("lateStderr") == [], "stderr during or after shutdown")
@@ -158,6 +174,9 @@ def parse_report(text: str) -> tuple[dict, bool, bool, str]:
             identity = (file["filepath"], file["project"])
             require(identity not in file_identities, "duplicate file identity")
             file_identities.add(identity)
+            if version == "4.1.12":
+                require(file.get("unsupportedSnapshots") is False,
+                        "domain and polling snapshots are unsupported")
             file_reads = reads(file.get("snapshots"))
             snapshot_identities = set()
             test_names, snapshot_names = {}, set()

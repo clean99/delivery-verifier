@@ -84,7 +84,10 @@ def run(
             "unsupported_runner",
         )
     if runner == "vitest":
+        from dv.vitest4 import select, validate_options
+
         instrument(command, {})
+        validate_options(command, select(command, Path.cwd())["version"])
     repo = LocalRepo(Path.cwd())
     head, tip = repo.resolve(head_ref), repo.resolve(base_ref)
     bases = repo.text("merge-base", "--all", head, tip).splitlines()
@@ -176,7 +179,8 @@ def run(
                 index = worktree.git_path("index").read_bytes()
                 log = directory / f"{phase}.log"
                 try:
-                    executed = run_test(phase_command, worktree.root, log, timeout, env)
+                    executed = run_test(phase_command, worktree.root, log, timeout, env,
+                                        phase_owned=True)
                     executed["tests"], executed["report_complete"] = receipt(
                         log.read_bytes(), runner, executed
                     )

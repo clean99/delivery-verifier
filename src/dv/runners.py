@@ -120,7 +120,7 @@ def command_path_indices(command: list[str]) -> set[int]:
 
 
 def instrument(command: list[str], env: dict[str, str], declared: str = "auto", *,
-               reporter: Path | None = None) -> list[str]:
+               reporter: Path | None = None, version: str | None = None) -> list[str]:
     runner = "vitest" if declared == "vitest" else runner_for(command)
     if runner == "vitest":
         index = vitest_index(command)
@@ -129,6 +129,9 @@ def instrument(command: list[str], env: dict[str, str], declared: str = "auto", 
                 "Vitest requires a direct vitest, npx vitest or pnpm [exec] vitest command"
             )
         validate_vitest_args(command[index + 1:])
+        from dv.vitest4 import validate_options
+
+        validate_options(command, version)
         env["CI"] = "true"
         env.pop("UPDATE_SNAPSHOT", None)
         reporter = reporter or Path(__file__).with_name("_vitest_reporter.mjs")
@@ -136,7 +139,8 @@ def instrument(command: list[str], env: dict[str, str], declared: str = "auto", 
         if Path(command[0]).name == "npx":
             prefix = [command[0], "--no-install", *command[1:]]
         run_flag = [] if "--run" in command[index + 1:] else ["--run"]
-        return [*prefix, *run_flag, "--watch=false", "--coverage.enabled=false", "--update=false",
+        update = "--update=none" if version == "4.1.12" else "--update=false"
+        return [*prefix, *run_flag, "--watch=false", "--coverage.enabled=false", update,
                 "--reporter=default", f"--reporter={reporter}"]
     if runner == "unittest":
         index = command.index("-m")
@@ -155,7 +159,7 @@ def instrument(command: list[str], env: dict[str, str], declared: str = "auto", 
 
 def run_test(
     command: list[str], cwd: Path, log: Path, timeout: int, env: dict[str, str],
-    declared: str = "auto",
+    declared: str = "auto", *, phase_owned: bool = False,
 ) -> dict:
     if runner_for(command, declared) == "pytest":
         return run_pytest(command, cwd, log, timeout, env, declared)
@@ -170,10 +174,24 @@ def run_test(
         if probe.is_relative_to(cwd.resolve()):
             raise DVError("Vitest probe temporary directory must be outside the execution checkout")
         probe.mkdir(parents=True)
-        for name in ("_vitest_reporter.mjs", "_vitest_runner.mjs"):
-            shutil.copyfile(Path(__file__).with_name(name), probe / name)
+        for source in Path(__file__).parent.glob("_vitest*.mjs"):
+            shutil.copyfile(source, probe / source.name)
+        from dv.vitest4 import prepare, select
+
+        selection = select(command, cwd)
         reporter = probe / "_vitest_reporter.mjs"
-        argv = instrument(command, env, declared, reporter=reporter)
+        argv = instrument(command, env, declared, reporter=reporter, version=selection["version"])
+        if selection["version"] == "4.1.12":
+            prepared = prepare(selection, cwd, Path(probe_directory).resolve(),
+                               phase_owned=phase_owned)
+            direct = instrument(["vitest", *command[vitest_index(command) + 1:]], env,
+                                reporter=reporter, version=selection["version"])
+            argv = ["node", prepared["cli"], *direct[1:]]
+            env.update(DV_VITEST4_PACKAGE=prepared["package"],
+                       DV_VITEST4_SOURCES=prepared["manifest"])
+        else:
+            env.pop("DV_VITEST4_PACKAGE", None)
+            env.pop("DV_VITEST4_SOURCES", None)
         nonce = uuid.uuid4().hex
         temporary = str(Path(probe_directory).resolve())
         env.update(DV_VITEST_REPORT=str(report), DV_VITEST_NONCE=nonce,

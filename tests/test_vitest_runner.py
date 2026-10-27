@@ -1254,7 +1254,8 @@ class RealVitestTests(unittest.TestCase):
                 "vite:r('vite/package.json').version}));", configuration["node_modules"]],
                 capture_output=True, text=True, check=True)
             self.assertEqual(json.loads(versions.stdout),
-                             {"vitest": "3.2.4", "vite": configuration["vite"]})
+                             {"vitest": configuration.get("vitest", "3.2.4"),
+                              "vite": configuration["vite"]})
             workspace = configuration.get("workspace", False)
             for package in ((True,) if workspace else (False, True)):
                 with self.subTest(configuration=configuration, package_json=package):

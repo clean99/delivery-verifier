@@ -4,42 +4,52 @@ import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import { basename, isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { selectedSources } from './_vitest4_sources.mjs';
 
 const errors = values => (values || []).map(error => ({
   name: error?.name ?? null,
   message: error?.message ?? null,
 }));
 
-function regexpSource(source, root, marker = 'root') {
+function pathSpans(text, root, temporary, regexp = false) {
   const escape = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const paths = [root, escape(root), escape(root).replaceAll('-', '\\-')]
-    .map(path => path.replaceAll('/', '\\/'));
-  const pattern = new RegExp('(' + [...new Set(paths)].sort((a, b) => b.length - a.length)
-    .map(escape).join('|') + ')');
-  return source.split(pattern).map((text, index) => index % 2 ? [marker] : text);
+  const paths = [];
+  for (const [path, marker] of [[root, 'root'], [temporary, 'temporary']]) {
+    if (!path) continue;
+    const forms = [path, JSON.stringify(path).slice(1, -1), path.replaceAll('/', '\\/')];
+    if (regexp) forms.push(escape(path), escape(path).replaceAll('/', '\\/'),
+      escape(path).replaceAll('-', '\\-').replaceAll('/', '\\/'));
+    for (const form of new Set(forms)) paths.push([form, marker]);
+  }
+  paths.sort((a, b) => b[0].length - a[0].length);
+  const pattern = new RegExp(paths.map(([path]) => escape(path)).join('|'), 'g');
+  const parts = [];
+  let start = 0;
+  for (const match of text.matchAll(pattern)) {
+    const after = text.slice(match.index + match[0].length);
+    // Do not turn a different external path sharing a prefix into a checkout path.
+    if (/^[\w.-]/.test(after)) continue;
+    parts.push(text.slice(start, match.index), [paths.find(([path]) => path === match[0])[1]]);
+    start = match.index + match[0].length;
+  }
+  parts.push(text.slice(start));
+  return parts;
 }
 
-function configHashes(config, vite, root) {
+export function configHashes(config, vite, root) {
   const omitted = new Set(['runner', 'reporter', 'reporters', 'cache', 'cacheDir']);
   const probeKeys = new Set(['DV_VITEST_REPORT', 'DV_VITEST_NONCE', 'DV_VITEST_ROOT',
-    'DV_VITEST_RUNNERS_MODULE', 'DV_VITEST_TASKS_MODULE', 'DV_VITEST_CHAI_MODULE', 'DV_VITEST_TEMP']);
+    'DV_VITEST_RUNNERS_MODULE', 'DV_VITEST_TASKS_MODULE', 'DV_VITEST_CHAI_MODULE', 'DV_VITEST_TEMP',
+    'DV_VITEST4_PACKAGE', 'DV_VITEST4_SOURCES']);
   const temporary = process.env.DV_VITEST_TEMP;
   function canonical(value, trail = [], seen = new Set()) {
-    if (typeof value === 'string') {
-      if (temporary && value.includes(temporary)) {
-        return ['temporary', ...value.split(temporary).map(part => canonical(part))];
-      }
-      return value === root ? '.' : value.split(root + '/').join('./');
-    }
+    if (typeof value === 'string') return ['string', pathSpans(value, root, temporary)];
     if (value === null || typeof value === 'boolean') return value;
     if (typeof value === 'number') return ['number', Object.is(value, -0) ? '-0' : String(value)];
     if (typeof value === 'undefined') return ['undefined'];
     if (typeof value === 'function') return ['function', canonical(value.toString())];
     if (value instanceof RegExp) {
-      let source = regexpSource(value.source, root);
-      if (temporary) source = source.flatMap(part => typeof part === 'string'
-        ? regexpSource(part, temporary, 'temporary') : [part]);
-      return ['regexp', source, value.flags, value.lastIndex];
+      return ['regexp', pathSpans(value.source, root, temporary, true), value.flags, value.lastIndex];
     }
     if (value instanceof Date) return ['date', value.toISOString()];
     if (typeof value !== 'object' || seen.has(value)) {
@@ -87,12 +97,14 @@ function taskRecord(task) {
     fails: task.fails ?? false,
     result: result ? {
       state: result.state,
-      errors: errors(result.errors),
+      errors: (result.errors || []).map(error => ({ ...errors([error])[0],
+        ...(error.dvBodyToken ? { token: error.dvBodyToken } : {}) })),
       hooks: result.hooks ?? {},
       retryCount: result.retryCount ?? 0,
       repeatCount: result.repeatCount ?? 0,
     } : null,
     probe: task.meta?.dvProbe ?? null,
+    unsupportedSnapshots: task.meta?.dvUnsupportedSnapshots ?? null,
     body: task.meta?.dvBody ?? null,
     snapshots: task.meta?.dvSnapshots ?? null,
     snapshotIdentity: task.meta?.dvSnapshotIdentity ?? null,
@@ -110,6 +122,15 @@ export default class DeliveryReporter {
   written = false;
   guarded = new WeakSet();
   harness = [];
+  postCloseErrors = null;
+  finalErrors() {
+    if (typeof this.ctx?.state?.getUnhandledErrors !== 'function') {
+      throw new Error('dv: missing final Vitest error collection');
+    }
+    const collected = this.ctx.state.getUnhandledErrors();
+    if (!Array.isArray(collected)) throw new Error('dv: malformed final Vitest error collection');
+    return errors(collected);
+  }
 
   guardClose(target) {
     if (!target || typeof target.close !== 'function' || this.guarded.has(target)) return;
@@ -133,6 +154,8 @@ export default class DeliveryReporter {
 
   onInit(ctx) {
     this.version = ctx.version;
+    this.ctx = ctx;
+    this.v4 = this.version === '4.1.12';
     process.on('uncaughtExceptionMonitor', error => this.invalidate(error));
     process.on('unhandledRejection', error => {
       this.invalidate(error);
@@ -162,6 +185,7 @@ export default class DeliveryReporter {
       this.closing = true;
       try {
         const result = await close(...args);
+        if (this.v4) this.postCloseErrors = this.finalErrors();
         this.closed = true;
         return result;
       } catch (error) {
@@ -170,18 +194,24 @@ export default class DeliveryReporter {
       }
     };
     process.once('exit', exitCode => {
+      let finalErrors = null;
+      if (this.v4) {
+        try { finalErrors = this.finalErrors(); } catch (error) { this.invalidate(error); }
+      }
       writeFileSync(process.env.DV_VITEST_REPORT, JSON.stringify({
         schema_version: 7, runner: 'vitest', version: this.version,
         nonce: process.env.DV_VITEST_NONCE, ...this.record,
         exitCode, shutdownComplete: this.closed,
         lateErrors: errors(this.lateErrors), lateStderr: this.lateStderr,
+        ...(this.v4 ? { sourceVerified: this.sourceVerified === true,
+          postCloseErrors: this.postCloseErrors, finalErrors } : {}),
       }), { flag: 'wx' });
       this.written = true;
     });
 
     const configs = [ctx.config, ...ctx.projects.map(project => project.config)];
     let error;
-    if (!/^3\.2\.\d+$/.test(this.version)) {
+    if (!/^3\.2\.\d+$/.test(this.version) && !this.v4) {
       error = `Unsupported Vitest version ${this.version}; supported: 3.2.x`;
     } else if (configs.some(config => config.runner ||
       config.browser?.enabled || !['forks', 'threads'].includes(config.pool))) {
@@ -190,6 +220,9 @@ export default class DeliveryReporter {
     }
     if (configs.some(config => config.coverage?.enabled)) {
       error = 'Vitest coverage must be disabled during proof';
+    }
+    if (this.v4 && configs.some(config => config.onUnhandledError != null)) {
+      error = 'Vitest onUnhandledError callbacks are unsupported';
     }
     if (configs.some(config => config.globalSetup?.length)) {
       error = 'Vitest globalSetup/teardown is unsupported';
@@ -204,11 +237,20 @@ export default class DeliveryReporter {
     this.ctx = ctx;
     this.harness = this.harnessInputs(ctx);
     const require = createRequire(process.argv[1]);
-    process.env.DV_VITEST_RUNNERS_MODULE = require.resolve('vitest/runners');
-    process.env.DV_VITEST_TASKS_MODULE = require.resolve('@vitest/runner');
-    process.env.DV_VITEST_CHAI_MODULE = require.resolve('chai');
+    if (this.v4) {
+      const sources = selectedSources(require.resolve('vitest/package.json'));
+      this.sourceVerified = true;
+      process.env.DV_VITEST_RUNNERS_MODULE = sources.entry.path;
+      const executing = createRequire(sources.matchers.path);
+      process.env.DV_VITEST_CHAI_MODULE = executing.resolve('chai');
+    } else {
+      process.env.DV_VITEST_RUNNERS_MODULE = require.resolve('vitest/runners');
+      process.env.DV_VITEST_TASKS_MODULE = require.resolve('@vitest/runner');
+      process.env.DV_VITEST_CHAI_MODULE = require.resolve('chai');
+    }
     for (const project of ctx.projects) {
-      project.config.runner = fileURLToPath(new URL('./_vitest_runner.mjs', import.meta.url));
+      project.config.runner = fileURLToPath(new URL(
+        this.v4 ? './_vitest4_runner.mjs' : './_vitest_runner.mjs', import.meta.url));
     }
   }
 
@@ -233,7 +275,14 @@ export default class DeliveryReporter {
       }
       for (const filename of [...project.config.setupFiles, ctx._workspaceConfigPath]) {
         if (!filename) continue;
-        for (const graph of [project.vite.moduleGraph, ctx.vite.moduleGraph]) {
+        const graphs = new Set([project.vite, ctx.vite].flatMap(server =>
+          [server.moduleGraph, ...Object.values(server.environments || {})
+            .map(environment => environment.moduleGraph)]).filter(Boolean));
+        if (!graphs.size) throw new Error('dv: missing Vite environment module graph');
+        for (const graph of graphs) {
+          if (typeof graph.getModulesByFile !== 'function') {
+            throw new Error('dv: unsupported Vite environment module graph');
+          }
           for (const module of graph.getModulesByFile(filename) || []) visit(module);
         }
       }
