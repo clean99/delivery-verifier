@@ -74,6 +74,19 @@ class ExecutionReceiptTests(unittest.TestCase):
                 phase, log = self.report("pytest", source)
                 self.assertEqual(green_execution(phase, log, "pytest")[0], expected, log)
 
+    @unittest.skipUnless(importlib.util.find_spec("pytest"), "pytest is optional test tooling")
+    def test_pytest_warnings_do_not_hide_or_block_results(self):
+        for body, expected in (
+            ("warnings.warn('deprecated', DeprecationWarning)\n    assert 1 == 1", True),
+            ("warnings.warn('first')\n    warnings.warn('second')\n    assert 1 == 1", True),
+            ("warnings.warn('deprecated', DeprecationWarning)\n    assert 1 == 2", False),
+        ):
+            with self.subTest(body=body):
+                source = "import warnings\n\ndef test_value():\n    " + body + "\n"
+                phase, log = self.report("pytest", source)
+                self.assertIn(b"warning", log)
+                self.assertEqual(green_execution(phase, log, "pytest")[0], expected, log)
+
     def test_malformed_count_record_fails_closed(self):
         log = (
             b'DV-RUNNER-PHASES {"runner": "unittest", '

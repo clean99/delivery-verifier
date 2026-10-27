@@ -46,8 +46,8 @@ def receipt(content: bytes, runner: str) -> tuple[dict, bool]:
         )
     elif runner == "pytest":
         summaries = re.findall(
-            r"^(?:=+ )?((?:\d+ (?:passed|failed|skipped|deselected|xfailed|xpassed|errors?)"
-            r"(?:, )?)+) in [^\n]+$",
+            r"^(?:=+ )?((?:\d+ (?:passed|failed|skipped|deselected|xfailed|xpassed|errors?"
+            r"|warnings?)(?:, )?)+) in [^\n]+$",
             text,
             re.M,
         )

@@ -5,6 +5,7 @@
 ### Fixed
 
 - `dv prove` accepts unchanged tracked test-support symlinks that directly resolve to regular files inside both snapshots with identical target bytes and modes. Keep these links from base instead of overlaying them from head. Added, deleted or changed links, escaping targets, chains, loops and links to changed production files still fail before either phase.
+- pytest runs whose summary line reports warnings (for example `6 passed, 2 warnings`) are recognised as complete. Previously the green phase of such a run counted as incomplete.
 
 ## 0.3.0 — 2026-10-27
 
