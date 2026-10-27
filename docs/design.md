@@ -8,7 +8,7 @@ A coding agent can finish a change that looks convincing but is not ready to lea
 
 The local commands, validation, evidence records, and optional hook adapters are implemented. Verification never substitutes a placeholder PASS for an unperformed check. The contracts below describe the implementation and its deliberate limits.
 
-`dv` is not a security sandbox. It must not report a false PASS for hollow tests, wrong-reason failures, tests that never ran, skips, XPASS, errors, or results misreported through ordinary test output, `conftest` hooks or the process exit path. Deliberate in-process tampering with `dv`'s own probe objects or private pipe is outside this threat model.
+`dv` is not a security sandbox. It must not report a false PASS for hollow tests, wrong-reason failures, tests that never ran, skips, XPASS, errors, or results misreported through printed output, late rewrites of the report file in summary, unconfigure or exit hooks, or the process exit path. Test code, `conftest.py` files and plugins share the pytest process with the probe. Code there that rewrites pytest's own report objects (for example clearing `wasxfail` or changing `outcome` in `pytest_runtest_logreport`), or that tampers with `dv`'s probe objects or private pipe, is outside this threat model.
 
 ## Proof-only entry point
 
