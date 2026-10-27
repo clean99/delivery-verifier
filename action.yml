@@ -5,7 +5,7 @@ inputs:
     description: Direct unittest, pytest, Node TAP, or Vitest test command
     required: true
   base:
-    description: Origin branch, tag, or full commit ID; defaults to the PR base or default branch
+    description: Origin branch (short name or refs/heads/...); defaults to the PR base or default branch
     required: false
   version:
     description: Release version (with or without v), or local for this action's source

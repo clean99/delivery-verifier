@@ -111,12 +111,12 @@ Pinning the action to a reviewed full commit SHA is the most locked-down option.
 | Input | Default | Meaning |
 | --- | --- | --- |
 | `test` | Required | Direct supported runner command, split as argv without shell expansion. |
-| `base` | PR base branch on `pull_request`, repository default branch otherwise | Branch, tag or full commit ID fetched from `origin`. `origin/main` and `refs/heads/main` are also accepted. The proof uses its merge base with checked-out `HEAD`. |
+| `base` | PR base branch on `pull_request`, repository default branch otherwise | Branch fetched from `origin`, such as `main`, `release/topic` or `refs/heads/main`. Short names always select `refs/heads/`, never a same-named tag. Tags, commit IDs and remote-tracking aliases are not supported. The proof uses the branch's merge base with checked-out `HEAD`; a missing branch fails. |
 | `version` | `local` | Install with pipx from the action's own source at the same pinned commit. An explicit release version, such as `0.3.0` or `v0.3.0`, installs its GitHub Release wheel instead. |
 | `timeout` | `1800` | Positive integer seconds per red/green phase. |
 | `working-directory` | `.` | Git repository root, relative to `GITHUB_WORKSPACE` or absolute. Tests run from this root; use repository-relative test paths. |
 
-The action prepares its own Python 3.12 and pipx environment without replacing the test command's Python or PATH. Install your project's dependencies before the action. Shallow checkouts fail with guidance to set `fetch-depth: 0`; the CLI itself still never fetches. On a push to the default branch, select an earlier `base` explicitly if you want to prove a previous change.
+The action prepares its own Python 3.12 and pipx environment without replacing the test command's Python or PATH. Install your project's dependencies before the action. Shallow checkouts fail with guidance to set `fetch-depth: 0`; the CLI itself still never fetches. On a push to the default branch, use a `base` branch pointing to an earlier commit if you want to prove a previous change.
 
 Outputs are `ok` (`true` or `false`), `verdict` (`PASS` or `FAIL`), and `evidence-path` (an absolute directory). The job summary shows the verdict, red/green status and reason. Each invocation uploads a uniquely named `dv-proof-*` artifact with a seven-day retention, including `proof.json`, phase logs and adapter diagnostics. Early failures retain the available diagnostics. A failed or incomplete proof fails the action after the upload attempt; keep the action as a required check rather than using `continue-on-error`.
 

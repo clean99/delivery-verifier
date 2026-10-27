@@ -111,12 +111,12 @@ jobs:
 | 输入 | 默认值 | 含义 |
 | --- | --- | --- |
 | `test` | 必填 | 直接调用受支持的运行器，按参数数组解析，保留原有 shell 展开限制。 |
-| `base` | `pull_request` 的目标分支，其他事件使用仓库默认分支 | 从 `origin` 拉取的分支、tag 或完整 commit ID，也接受 `origin/main`、`refs/heads/main`。证明基线为它与检出 `HEAD` 的合并基点。 |
+| `base` | `pull_request` 的目标分支，其他事件使用仓库默认分支 | 从 `origin` 拉取的分支，例如 `main`、`release/topic` 或 `refs/heads/main`。短名称始终按 `refs/heads/` 解析，同名 tag 不影响选择。输入范围仅限分支，排除 tag、commit ID 和远程跟踪别名。证明基线为该分支与检出 `HEAD` 的合并基点，分支缺失时失败。 |
 | `version` | `local` | 用 pipx 从 action 自身的源码目录安装，与固定的 action commit 一致。显式填写 `0.3.0` 或 `v0.3.0` 等发布版本时，改为安装对应的 GitHub Release wheel。 |
 | `timeout` | `1800` | 每个 red/green 阶段的超时秒数，取正整数。 |
 | `working-directory` | `.` | Git 仓库根目录，相对于 `GITHUB_WORKSPACE`，也可传绝对路径。测试从此根目录运行，测试路径按仓库根目录填写。 |
 
-Action 单独准备 Python 3.12 和 pipx 环境，保留测试命令原有的 Python 和 PATH。项目依赖需提前安装。浅克隆会验证失败，并提示设置 `fetch-depth: 0`；拉取操作只在 action 适配层执行。默认分支上的 push 若要验证之前的改动，应显式指定较早的 `base`。
+Action 单独准备 Python 3.12 和 pipx 环境，保留测试命令原有的 Python 和 PATH。项目依赖需提前安装。浅克隆会验证失败，并提示设置 `fetch-depth: 0`；拉取操作只在 action 适配层执行。默认分支上的 push 若要验证之前的改动，应将 `base` 设为指向较早提交的分支。
 
 输出为 `ok`（`true` 或 `false`）、`verdict`（`PASS` 或 `FAIL`）和 `evidence-path`（证据目录绝对路径）。Job summary 显示结论、red/green 状态和原因。每次调用上传独立命名的 `dv-proof-*` artifact，保留七天，包含 `proof.json`、阶段日志及适配层诊断。早期失败保留已有诊断。失败或未完成的证明在尝试上传后使 action 失败；应将其设为必需检查，保持默认的失败行为。
 

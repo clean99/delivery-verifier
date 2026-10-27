@@ -4,7 +4,7 @@
 
 ### Added
 
-- Root GitHub composite action for `dv prove`, with explicit or event-derived base refs, release-wheel or local-source installation through pipx, per-phase timeouts, job summaries, outputs and uploaded evidence. Failed or incomplete proof fails the action; existing proof checks are unchanged.
+- Root GitHub composite action for `dv prove`, with explicit or event-derived base branches, release-wheel or local-source installation through pipx, per-phase timeouts, job summaries, outputs and uploaded evidence. Failed or incomplete proof fails the action; existing proof checks are unchanged.
 - Action self-tests on Ubuntu and macOS for a qualifying pytest regression and a test that passes without the fix, plus English and Chinese CI examples for pytest and Vitest.
 
 ## 0.2.0 — 2026-10-27

@@ -52,16 +52,20 @@ def fetch_base(repo: Path, base: str, default: str) -> str:
         raise ValueError("working-directory must be a repository root; tests run from that root")
     if git(repo, "rev-parse", "--is-shallow-repository") != "false":
         raise ValueError("A full checkout is required; set actions/checkout fetch-depth: 0")
-    ref = base or (f"refs/heads/{default}" if default else "")
-    for prefix in ("refs/remotes/origin/", "origin/"):
-        if ref.startswith(prefix):
-            ref = "refs/heads/" + ref[len(prefix):]
-            break
-    if not ref:
+    branch = base or default
+    if not branch:
         raise ValueError("No default branch is available; set the base input")
-    if not re.fullmatch(r"[0-9a-fA-F]{40}|[0-9a-fA-F]{64}", ref):
-        git(repo, "check-ref-format", ref if ref.startswith("refs/") else f"refs/heads/{ref}")
-    git(repo, "fetch", "--no-tags", "--no-recurse-submodules", "--", "origin", ref)
+    if branch.startswith("refs/") and not branch.startswith("refs/heads/"):
+        raise ValueError("base must name an origin branch; only refs/heads/ refs are supported")
+    ref = branch if branch.startswith("refs/heads/") else f"refs/heads/{branch}"
+    git(repo, "check-ref-format", ref)
+    try:
+        git(repo, "fetch", "--no-tags", "--no-recurse-submodules", "--", "origin", ref)
+    except ValueError as error:
+        raise ValueError(
+            f"Cannot fetch base branch {ref} from origin; "
+            "check that the branch exists and origin is accessible. " + str(error)
+        ) from error
     return git(repo, "rev-parse", "--verify", "FETCH_HEAD^{commit}")
 
 

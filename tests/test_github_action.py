@@ -3,7 +3,9 @@ from __future__ import annotations
 import copy
 import json
 import os
+import shlex
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -12,6 +14,7 @@ from unittest.mock import patch
 from support import Sandbox, git
 
 from dv import github_action as action
+from dv import prove
 
 
 def passing_proof():
@@ -123,8 +126,7 @@ class GithubActionTests(unittest.TestCase):
             git(box.root, "remote", "add", "origin", str(remote))
             expected = git(box.root, "rev-parse", "main")
             before = box.head
-            for base in ("", "main", "origin/main", "refs/remotes/origin/main",
-                         "refs/heads/main", expected):
+            for base in ("", "main", "refs/heads/main"):
                 self.assertEqual(action.fetch_base(box.root.resolve(), base, "main"), expected)
             self.assertEqual(box.head, before)
             for base in ("nonexistent", "main:refs/heads/other", "$(touch marker)",
@@ -137,6 +139,67 @@ class GithubActionTests(unittest.TestCase):
             git(box.root, "clone", "--depth=1", remote.as_uri(), str(shallow))
             with self.assertRaisesRegex(ValueError, "fetch-depth: 0"):
                 action.fetch_base(shallow.resolve(), "main", "")
+
+    def test_branch_tag_collision_cannot_prove_a_test_only_change(self):
+        box = Sandbox(
+            old={"words.py": 'def split_words(text):\n    return text.split(" ")\n'},
+            new={"words.py": "def split_words(text):\n    return text.split()\n"},
+        )
+        self.addCleanup(box.close)
+        buggy = git(box.root, "rev-parse", "refs/heads/main")
+        fixed = box.head
+        git(box.root, "branch", "-f", "main", fixed)
+        box.write("tests/test_words.py", (
+            "import unittest\nfrom words import split_words\n"
+            "class WordsTests(unittest.TestCase):\n"
+            "    def test_repeated_spaces(self):\n"
+            '        self.assertEqual(split_words("red   green"), ["red", "green"])\n'
+        ))
+        box.commit("Add only a regression test")
+        command = shlex.join([sys.executable, "-m", "unittest", "discover", "-s", "tests",
+                              "-p", "test_words.py", "-v"])
+        with tempfile.TemporaryDirectory() as temp:
+            remote = Path(temp) / "remote.git"
+            git(box.root, "clone", "--bare", str(box.root), str(remote))
+            git(remote, "tag", "main", buggy)
+            git(box.root, "remote", "add", "origin", str(remote))
+            for base in ("main", "refs/heads/main", ""):
+                with self.subTest(base=base):
+                    selected = action.fetch_base(box.root.resolve(), base, "main")
+                    with patch("dv.prove.Path.cwd", return_value=box.root):
+                        proof = prove.run(command, base_ref=selected)
+                    self.assertFalse(proof["ok"], proof)
+                    self.assertEqual(selected, fixed)
+                    self.assertEqual(proof["base_tip_sha"], fixed)
+                    self.assertIn("production difference", proof["error"]["message"])
+                    self.assertIsNone(proof["red"])
+
+    def test_missing_origin_branch_does_not_fall_back_to_a_tag_or_commit(self):
+        box = Sandbox()
+        self.addCleanup(box.close)
+        with tempfile.TemporaryDirectory() as temp:
+            remote = Path(temp) / "remote.git"
+            git(box.root, "clone", "--bare", str(box.root), str(remote))
+            git(remote, "tag", "missing", box.head)
+            git(box.root, "remote", "add", "origin", str(remote))
+            for base in ("missing", "refs/heads/missing", box.head):
+                with self.subTest(base=base), self.assertRaisesRegex(ValueError, "base branch"):
+                    action.fetch_base(box.root.resolve(), base, "main")
+            for base in ("refs/tags/missing", "refs/remotes/origin/main", "refs/pull/1/head"):
+                with self.subTest(base=base), self.assertRaisesRegex(ValueError, "refs/heads/"):
+                    action.fetch_base(box.root.resolve(), base, "main")
+
+    def test_slash_branch_is_fetched_in_the_heads_namespace(self):
+        box = Sandbox()
+        self.addCleanup(box.close)
+        git(box.root, "branch", "release/topic", box.head)
+        with tempfile.TemporaryDirectory() as temp:
+            remote = Path(temp) / "remote.git"
+            git(box.root, "clone", "--bare", str(box.root), str(remote))
+            git(box.root, "remote", "add", "origin", str(remote))
+            for base in ("release/topic", "refs/heads/release/topic", ""):
+                self.assertEqual(action.fetch_base(box.root.resolve(), base, "release/topic"),
+                                 box.head)
 
     def test_evidence_copy_requires_owned_path_and_matching_saved_proof(self):
         box = Sandbox()
