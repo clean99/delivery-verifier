@@ -249,6 +249,8 @@ Vitest 省略 `run` 时也只运行一次；显式 watch 模式及 reporter/outp
 
 4.1.12 适配先校验固定源码指纹，再仅修改阶段独占的依赖副本。探针在 fixture 解析完成后观察原始测试函数，每个执行的测试须完整进入并结束一次。Fixture setup/teardown、hook、断言次数检查和脱离测试体的异步错误均按测试体外错误处理。关闭后的错误集合和报告输出前的最终错误集合必须为空，worker teardown 错误也计入检查。配置中的 `onUnhandledError` 回调及 `aroundEach`/`aroundAll` hook 会使证明失败，源码指纹变化同样拒绝。超时、取消和待完成断言仍由 Vitest 原有包装层处理；异步断言需在测试函数内等待完成。
 
+4.1.12 的已知限制：测试体直接返回 `resolves` 或 `rejects` matcher 的 thenable，例如 `return expect(p).resolves.toBe(x)`，两阶段都会报告 `unsupported test-body thenable`。请使用 async 测试函数，并在函数内写 `await expect(p).resolves.toBe(x)`；`rejects` 同样适用。
+
 Vitest 命令行只接受以下参数：
 
 | 用途 | 支持的参数 |

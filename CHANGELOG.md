@@ -11,8 +11,12 @@
 
 ### Fixed
 
-- Reject functions in Vite resolver settings, including both alias `customResolver` forms, rather than treating identical function source as proof of identical closed-over targets. Declarative aliases remain supported.
+- Deliberately tighten Vitest 3.2.x as well as 4.1.12 by rejecting functions in Vite resolver settings, including both alias `customResolver` forms. Previously accepted 3.2.x function resolvers now reject: identical function source cannot prove identical closed-over targets. Declarative aliases remain supported.
 - Reject direct Vitest 4.1.12 snapshot-cache reads (`_snapshotData` and `_initialData`) in forks and threads, including caught errors, so switching expected entries cannot bypass per-test snapshot binding.
+
+### Known limitations
+
+- Vitest 4.1.12 test bodies that directly return a `resolves` or `rejects` matcher thenable reject in both phases as `unsupported test-body thenable`. The observer cannot safely track that thenable as a native promise. Use `await expect(p).resolves.toBe(x)` inside an async test body instead of `return expect(p).resolves.toBe(x)`; the same workaround applies to `rejects`.
 
 ## 0.3.1 — 2026-10-28
 

@@ -395,6 +395,24 @@ class RealVitest4Tests(unittest.TestCase):
             "export default {test:{onUnhandledError: () => false}};"},
             detail="onUnhandledError callbacks")
 
+    def test_matcher_thenables_require_await_inside_the_body(self):
+        for pool in ("forks", "threads"):
+            for method in ("resolves", "rejects"):
+                promise = "resolve" if method == "resolves" else "reject"
+                assertion = f"expect(Promise.{promise}(value)).{method}.toBe(2)"
+                for form, expected in (("return", "unsupported"), ("await", "pass")):
+                    with self.subTest(pool=pool, method=method, form=form, expected=expected):
+                        handler = "async()=>" if form == "await" else "()=>"
+                        _, output, records = self.prove(
+                            f"test('value',{handler}{{{form} {assertion};}});",
+                            {"vitest.config.mjs": "export default {test:{pool:'" + pool + "'}};"},
+                            accepted=expected == "pass")
+                        if expected == "unsupported":
+                            for phase in ("red", "green"):
+                                self.assertEqual(output[phase]["exit_code"], 1)
+                                self.assertIn("dv: unsupported test-body thenable",
+                                              str(records[phase]))
+
     def test_body_async_boundaries(self):
         for source, accepted in (
             ("test('value',async()=>{await expect(Promise.resolve(value)).resolves.toBe(2);});",

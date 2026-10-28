@@ -249,6 +249,8 @@ Vitest runs once even when `run` is omitted; explicit watch mode and reporter/ou
 
 For 4.1.12, `dv` verifies pinned Vitest source fingerprints and instruments only phase-owned dependency copies. The original handler is observed after fixture resolution, with exactly one completed body invocation required. Fixture setup/teardown, hooks, assertion-count failures and detached async errors cannot qualify as body assertions. Both the post-close and final error collections must be empty, including worker teardown errors. Configured `onUnhandledError` callbacks and `aroundEach`/`aroundAll` hooks are rejected. Modified or unrecognized Vitest sources fail closed. The stock timeout, cancellation and pending-assertion wrappers remain outside the body boundary; await async assertions inside the handler.
 
+Known limitation on 4.1.12: a test body that directly returns a `resolves` or `rejects` matcher thenable, such as `return expect(p).resolves.toBe(x)`, is rejected in both phases as `unsupported test-body thenable`. Use an async test body with `await expect(p).resolves.toBe(x)` instead; the same workaround applies to `rejects`.
+
 Vitest's CLI allowlist is limited to:
 
 | Purpose | Accepted arguments |

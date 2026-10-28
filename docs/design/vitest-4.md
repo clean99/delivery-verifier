@@ -17,6 +17,12 @@ Absent tooling skips the real-runner tests; the 4.1.12 version is checked before
 
 Local version selection chooses `--update=none` for 4.1.12 and rejects `--minWorkers` before launching proof phases. The reporter rechecks the executing version and source identity. Startup/configuration failures without a valid report reject proof with the runner diagnostic and phase log path, rather than a parser exception.
 
+## Known limitations and compatibility
+
+A 4.1.12 test body that directly returns a `resolves` or `rejects` matcher thenable, such as `return expect(p).resolves.toBe(x)`, is rejected in both phases as `unsupported test-body thenable`. The body observer cannot safely track that matcher thenable as a native promise. Use an async test body with `await expect(p).resolves.toBe(x)` instead; `rejects` has the same workaround. The runner controls expect rejection for the return form and PASS for the await form in both forks and threads.
+
+The resolver-function check deliberately tightens Vitest 3.2.x as well as 4.1.12. Functions in Vite resolver settings, including function and object-form alias `customResolver` callbacks, are rejected even when their source is unchanged: identical source cannot establish identical closed-over resolution targets. Use declarative aliases instead.
+
 ## Why the old body wrapper is unsafe
 
 The retained test below observes a change from `value = 1` on base to `value = 2` on head:
