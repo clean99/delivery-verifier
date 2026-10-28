@@ -43,6 +43,14 @@ function instrument(key, text) {
     const insertion = 'result.errors.push(...errors);';
     text = text.slice(0, fail) + replace(text.slice(fail), insertion,
       `${observer}.errors(result, e, errors);\n\t\t${insertion}`);
+  } else if (key === 'snapshot') {
+    for (const [method, signature] of [
+      ['probeExpectedSnapshot', 'probeExpectedSnapshot(options) {'],
+      ['match', 'match({ testId, testName, received, key, inlineSnapshot, isInline, error, rawSnapshot, assertionName }) {'],
+    ]) {
+      text = replace(text, signature,
+        `${signature}\n\t\t${observer}.snapshotState(this, '${method}', import.meta.url);`);
+    }
   } else if (key === 'expect') {
     text = replace(text, 'test.result.errors.push(processError(err));',
       `const serialized = processError(err);\n\t${observer}.soft(test, err, serialized, import.meta.url);\n\ttest.result.errors.push(serialized);`);

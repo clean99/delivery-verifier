@@ -207,8 +207,14 @@ def run_test(
                 raise ValueError("report nonce mismatch")
             if record.get("exitCode") != phase["exit_code"]:
                 raise ValueError("report exit status mismatch")
-        except (OSError, ValueError):
+        except (OSError, ValueError) as error:
             record = None
+            diagnostics = ANSI.sub("", log.read_text(errors="replace")).strip()
+            reason = next((line for line in diagnostics.splitlines() if "Error:" in line),
+                          diagnostics[-1000:])
+            phase["report_error"] = (
+                f"Vitest did not produce a valid report ({error}): {reason}; "
+                f"startup/configuration diagnostics: {log}")
         with log.open("ab") as stream:
             stream.write(("\n" + PREFIX + json.dumps(record) + "\n").encode())
         phase["log_sha256"] = digest(log.read_bytes())

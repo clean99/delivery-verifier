@@ -212,7 +212,7 @@ export default class DeliveryReporter {
     const configs = [ctx.config, ...ctx.projects.map(project => project.config)];
     let error;
     if (!/^3\.2\.\d+$/.test(this.version) && !this.v4) {
-      error = `Unsupported Vitest version ${this.version}; supported: 3.2.x`;
+      error = `Unsupported Vitest version ${this.version}; supported: 3.2.x and 4.1.12`;
     } else if (configs.some(config => config.runner ||
       config.browser?.enabled || !['forks', 'threads'].includes(config.pool))) {
       error = 'Vitest proof requires the default runner and forks/threads pool; ' +
@@ -320,8 +320,24 @@ export default class DeliveryReporter {
   onTestRunEnd(modules, unhandledErrors, reason) {
     if (this.record.complete) this.invalidate(new Error('multiple test runs'));
     const harness = this.harnessInputs(this.ctx);
+    if (harness.length !== this.harness.length) {
+      this.invalidate(new Error('harness projects changed during execution'));
+    }
     for (let index = 0; index < this.harness.length; index++) {
-      for (const input of this.harness[index].inputs) {
+      const before = this.harness[index];
+      const after = harness[index];
+      if (!after || ['project', 'root', 'kind'].some(key => before[key] !== after[key])) {
+        this.invalidate(new Error('harness project identity changed during execution'));
+        continue;
+      }
+      after.initialConfigHashes = before.configHashes;
+      for (const key of new Set([...Object.keys(before.configHashes),
+        ...Object.keys(after.configHashes)])) {
+        if (before.configHashes[key] !== after.configHashes[key]) {
+          this.invalidate(new Error(`effective configuration changed during execution: ${key}`));
+        }
+      }
+      for (const input of before.inputs) {
         if (!harness[index].inputs.some(current =>
           current.path === input.path && current.sha256 === input.sha256)) {
           this.invalidate(new Error(`harness input changed during execution: ${input.path}`));

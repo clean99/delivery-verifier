@@ -510,8 +510,9 @@ class RealVitestTests(unittest.TestCase):
                     self.assertEqual(output["red"]["exit_code"], 1, output)
                     self.assertEqual(output["green"]["exit_code"], 0, output)
                     if not accepted:
-                        self.assertIn("Snapshot read differs from head: " + path,
-                                      str(output["checks"]))
+                        detail = ("missing consumed snapshot file" if previous is None else
+                                  "Snapshot read differs from head: " + path)
+                        self.assertIn(detail, str(output["checks"]))
 
     def test_missing_snapshots_fail_without_writing_even_with_update_environment(self):
         for matcher in ("toMatchInlineSnapshot()", "toMatchSnapshot()"):

@@ -82,7 +82,7 @@ export default class DeliveryRunner extends VitestTestRunner {
   async onBeforeRunSuite(suite) {
     if (suite.mode !== 'skip' && 'filepath' in suite) {
       observeSnapshots(this.workerState.config.snapshotOptions.snapshotEnvironment,
-        suite.file);
+        suite.file, () => bodyContext.getStore()?.task.id);
     }
     await super.onBeforeRunSuite(suite);
     if (suite.mode === 'skip' || !('filepath' in suite)) return;
@@ -124,7 +124,7 @@ export default class DeliveryRunner extends VitestTestRunner {
   async runTask(test) {
     const body = { nonce: process.env.DV_VITEST_NONCE, fixtures: false, errors: [] };
     const context = {
-      record: body, softAssertions: new Set(), snapshots: new WeakSet(), mismatches: 0,
+      task: test, record: body, softAssertions: new Set(), snapshots: new WeakSet(), mismatches: 0,
     };
     test.meta.dvBody = body;
     const previousErrors = test.result?.errors?.length ?? 0;

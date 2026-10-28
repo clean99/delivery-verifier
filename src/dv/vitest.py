@@ -83,11 +83,17 @@ def parse_report(text: str) -> tuple[dict, bool, bool, str]:
         test_names[full_name] = test_names.get(full_name, 0) + 1
         if state in ("skip", "todo"):
             require(not failures, "skipped test has errors")
+            for field in ("snapshots", "snapshotEntries"):
+                consumed = reads(value[field]) if value.get(field) is not None else set()
+                require(all(sha is not None for _, sha in consumed),
+                        "missing consumed snapshot input in skipped test")
             counts["skipped"] += 1
             return 0
         test_reads = reads(value.get("snapshots"))
         require(test_reads <= file_reads,
                 "test snapshot inputs are absent from the file receipt")
+        require(all(sha is not None for _, sha in test_reads),
+                "missing consumed snapshot file")
         identity = value.get("snapshotIdentity")
         require(isinstance(identity, dict) and isinstance(identity.get("names"), list)
                 and identity["names"] and all(isinstance(name, str) for name in identity["names"])
@@ -99,6 +105,8 @@ def parse_report(text: str) -> tuple[dict, bool, bool, str]:
         snapshot_identities.add(test_identity)
         entries = value.get("snapshotEntries")
         reads(entries)
+        require(all(entry["sha256"] is not None for entry in entries),
+                "missing consumed snapshot entry")
         require(all(isinstance(entry.get("key"), str) and entry["key"]
                     and entry.get("kind") in ("external", "raw", "inline")
                     and (entry["kind"] == "inline"
@@ -144,7 +152,7 @@ def parse_report(text: str) -> tuple[dict, bool, bool, str]:
         version = record.get("version")
         require(isinstance(version, str) and (re.fullmatch(r"3\.2\.\d+", version)
                                              or version == "4.1.12"),
-                f"Unsupported Vitest version {version}; supported: 3.2.x")
+                f"Unsupported Vitest version {version}; supported: 3.2.x and 4.1.12")
         require(record.get("complete") is True,
                 str(record.get("error", "incomplete machine report")))
         if version == "4.1.12":
@@ -176,7 +184,8 @@ def parse_report(text: str) -> tuple[dict, bool, bool, str]:
             file_identities.add(identity)
             if version == "4.1.12":
                 require(file.get("unsupportedSnapshots") is False,
-                        "domain and polling snapshots are unsupported")
+                        "domain and polling snapshots are unsupported; "
+                        "unobserved snapshot access also rejects proof")
             file_reads = reads(file.get("snapshots"))
             snapshot_identities = set()
             test_names, snapshot_names = {}, set()
@@ -272,6 +281,37 @@ def snapshot_oracles(content: bytes, root: Path) -> dict:
     return oracles
 
 
+def test_outcomes(content: bytes, root: Path) -> dict:
+    """Index validated test results independently of worker-local task IDs."""
+    record = json.loads(re.findall(r"^" + PREFIX + r"(.+)$", content.decode("utf-8", "replace"),
+                                   re.M)[0])
+    outcomes = {}
+    for file in record["files"]:
+        key = (Path(file["filepath"]).relative_to(root).as_posix(), file["project"])
+        occurrences = {}
+
+        def visit(task, names):
+            if task["type"] == "test":
+                occurrences[names] = occurrences.get(names, 0) + 1
+                outcomes[(*key, names, occurrences[names])] = (
+                    (task["result"] or {}).get("state", task["mode"]))
+            for child in task["tasks"]:
+                visit(child, (*names, child["name"]))
+
+        visit(file, ())
+    return outcomes
+
+
+def test_parity(red: dict, green: dict) -> tuple[bool, str]:
+    for identity, state in sorted(red.items()):
+        if state == "fail" and green.get(identity) != "pass":
+            file, project, names, occurrence = identity
+            return False, (f"Base failure must execute and pass on head: {file} [{project}] "
+                           f"test {' > '.join(names)!r} occurrence {occurrence}; "
+                           f"head state={green.get(identity, 'missing')}")
+    return True, "Every base failure executed and passed with the same test identity on head"
+
+
 def snapshot_parity(red: dict, green: dict) -> tuple[bool, str]:
     for identity in sorted(red.keys() | green.keys()):
         left, right = red.get(identity), green.get(identity)
@@ -299,7 +339,10 @@ def harness_inputs(content: bytes, root: Path, repo, entries: dict) -> tuple[boo
         if len(records) != 1:
             raise ValueError("missing or duplicate harness report")
         record = json.loads(records[0])
-        projects = record.get("harness") if isinstance(record, dict) else None
+        if not isinstance(record, dict):
+            raise ValueError("missing or malformed machine report; Vitest may have failed "
+                             "during startup (see phase log for configuration errors)")
+        projects = record.get("harness")
         if record.get("schema_version") != 7 or not isinstance(projects, list) or not projects:
             raise ValueError("missing resolved Vitest harness inputs")
         for project in projects:
@@ -312,6 +355,9 @@ def harness_inputs(content: bytes, root: Path, repo, entries: dict) -> tuple[boo
                 and re.fullmatch(r"[0-9a-f]{64}", value) for key, value in hashes.items()
             ):
                 raise ValueError("missing effective harness configuration hashes")
+            if record.get("version") == "4.1.12" and project.get("initialConfigHashes") != hashes:
+                raise ValueError("effective configuration changed during execution "
+                                 "or initial configuration hashes are missing")
             files = project.get("inputs")
             if not isinstance(files, list):
                 raise ValueError("missing harness input list")

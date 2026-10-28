@@ -57,9 +57,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="prove one regression against committed snapshots",
         allow_abbrev=False,
         description=(
-            "Not a security sandbox. Run unittest, pytest, Node TAP, or Vitest 3.2.x against "
-            "committed base/head snapshots. Dirty local files are excluded and left untouched. "
-            "No dependency installs, implicit shell, or complete "
+            "Not a security sandbox. Run unittest, pytest, Node TAP, or Vitest 3.2.x / 4.1.12 "
+            "against committed base/head snapshots. Dirty local files are excluded and left "
+            "untouched. No dependency installs, implicit shell, or complete "
             "suite coverage guarantee. Jest and native Windows are unsupported."
         ),
     )

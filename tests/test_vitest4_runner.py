@@ -15,7 +15,7 @@ import test_vitest_runner as regression
 from support import ROOT, Sandbox, git
 
 from dv.runners import instrument
-from dv.vitest import PREFIX, parse_report
+from dv.vitest import PREFIX, harness_inputs, parse_report, test_outcomes, test_parity
 
 VITEST4 = os.environ.get("DV_VITEST4")
 IMPORT = "import {value} from '../src/value.js';\n"
@@ -31,7 +31,60 @@ class Vitest4ReceiptTests(unittest.TestCase):
                 record["version"] = version
                 _, complete, _, detail = parse_report(regression.report_text(record).decode())
                 self.assertFalse(complete)
-                self.assertIn(f"Unsupported Vitest version {version}; supported: 3.2.x", detail)
+                self.assertIn(f"Unsupported Vitest version {version}; "
+                              "supported: 3.2.x and 4.1.12", detail)
+
+    def test_base_failures_must_pass_under_the_same_identity(self):
+        red = regression.record_from(regression.captured("assertion"))
+        green = regression.record_from(regression.captured("pass"))
+        root = Path(red["files"][0]["filepath"]).parent
+        green["files"][0]["filepath"] = red["files"][0]["filepath"]
+        before = test_outcomes(regression.report_text(red), root)
+        self.assertTrue(test_parity(before, test_outcomes(regression.report_text(green), root))[0])
+        for state in ("skip", "todo", "fail"):
+            with self.subTest(state=state):
+                green["files"][0]["tasks"][0]["result"]["state"] = state
+                self.assertFalse(test_parity(
+                    before, test_outcomes(regression.report_text(green), root))[0])
+        self.assertFalse(test_parity(before, {})[0])
+        green["files"][0]["tasks"][0]["result"]["state"] = "pass"
+        for field in ("project", "filepath"):
+            changed = copy.deepcopy(green)
+            changed["files"][0][field] += "-other"
+            self.assertFalse(test_parity(
+                before, test_outcomes(regression.report_text(changed), root))[0])
+
+    def test_missing_consumed_entries_are_rejected(self):
+        for case in ("snapshot-inline", "snapshot-external"):
+            record = regression.record_from(regression.captured(case))
+            record["files"][0]["tasks"][0]["snapshotEntries"][0]["sha256"] = None
+            complete = parse_report(regression.report_text(record).decode())
+            self.assertFalse(complete[1])
+            self.assertIn("missing consumed snapshot entry", complete[3])
+
+    def test_null_harness_report_has_a_startup_diagnostic(self):
+        for record in (None, [], "report"):
+            valid, _, detail = harness_inputs(regression.report_text(record), ROOT, None, {})
+            self.assertFalse(valid)
+            self.assertIn("startup", detail)
+            self.assertIn("phase log", detail)
+            self.assertNotIn("has no attribute", detail)
+
+    def test_pre_execution_config_hashes_are_required(self):
+        record = {"schema_version": 7, "version": "4.1.12", "harness": [{
+            "kind": "root", "project": "", "root": ".", "inputs": [],
+            "configHashes": {"env": "1" * 64}}]}
+        for initial in (None, {"env": "2" * 64}, {"env": "1" * 64}):
+            record["harness"][0]["initialConfigHashes"] = initial
+            valid, _, _ = harness_inputs(regression.report_text(record), ROOT, None, {})
+            self.assertEqual(valid, initial == {"env": "1" * 64})
+
+    def test_cli_help_lists_both_supported_versions(self):
+        from dv.cli import build_parser
+
+        parser = build_parser()
+        help_text = parser._subparsers._group_actions[0].choices["prove"].format_help()
+        self.assertIn("Vitest 3.2.x / 4.1.12", " ".join(help_text.split()))
 
     def test_new_version_requires_source_and_shutdown_checkpoints(self):
         record = regression.record_from(regression.captured("pass"))
@@ -103,6 +156,72 @@ class RealVitest4Tests(unittest.TestCase):
                 self.assertEqual(record["postCloseErrors"], [])
                 self.assertEqual(record["finalErrors"], [])
         return box, output, records
+
+    def test_head_cannot_skip_or_todo_a_base_failure(self):
+        for source in (
+            "test.skipIf(value===2)('value',()=>expect(value).toBe(2));",
+            "(value===2?test.todo:test)('value',()=>expect(value).toBe(2));",
+            "test('value',({skip})=>{if(value===2)skip();expect(value).toBe(2)});",
+            "describe.skipIf(value===2)('suite',()=>{" + BODY + "});",
+        ):
+            with self.subTest(source=source):
+                self.prove(source + "test('other',()=>expect(true).toBe(true));",
+                           detail="Base failure must execute and pass on head")
+        self.prove(BODY + "test.skip('unrelated',()=>{});", accepted=True)
+
+    def test_configuration_cannot_change_then_converge(self):
+        config = ("import fs from 'node:fs';"
+            "const oracle=fs.readFileSync('src/value.js','utf8').includes('= 1')?'base':'head';"
+            "export default {test:{env:{ORACLE:oracle}},plugins:[{name:'converge',"
+            "configureVitest({vitest}){const report=vitest.report.bind(vitest);"
+            "vitest.report=async(name,...args)=>{if(name==='onTestRunEnd')"
+            "for(const project of vitest.projects)project.config.env.ORACLE='same';"
+            "return report(name,...args)}}}]};")
+        _, _, records = self.prove(
+            "test('value',()=>expect(process.env.ORACLE).toBe('head'));",
+            {"vitest.config.mjs": config}, detail="configuration changed during execution")
+        red = records["red"]["harness"][0]
+        green = records["green"]["harness"][0]
+        self.assertNotEqual(red["initialConfigHashes"]["env"], green["initialConfigHashes"]["env"])
+        self.assertEqual(red["configHashes"]["env"], green["configHashes"]["env"])
+
+    def test_direct_snapshot_state_access_is_sticky_rejection(self):
+        for method in ("match", "probeExpectedSnapshot"):
+            for caught in (False, True):
+                with self.subTest(method=method, caught=caught):
+                    access = ("const state=expect.getState().snapshotState;"
+                        f"state.{method}({{testId:task.id,testName:'value',received:2}})" +
+                        (".markAsChecked();" if method == "probeExpectedSnapshot" else ";"))
+                    if caught:
+                        access = "try{" + access + "}catch{}"
+                    _, _, records = self.prove(
+                        "test('value',({task})=>{" + access + "expect(value).toBe(2)});")
+                    for record in records.values():
+                        self.assertTrue(record["files"][0]["unsupportedSnapshots"])
+
+    def test_environment_reads_are_bound_to_each_test(self):
+        for concurrent in (False, True):
+            for swapped in (False, True):
+                with self.subTest(concurrent=concurrent, swapped=swapped):
+                    choice = "(index+value)%2" if swapped else "index"
+                    source = ("import {resolve} from 'node:path';"
+                        "for(const index of [0,1])test" + (".concurrent" if concurrent else "") +
+                        "('read '+index,async({expect})=>{"
+                        "const env=expect.getState().snapshotState.environment;"
+                        "await env.readSnapshotFile(resolve('golden/'+" + choice + "+'.txt'));"
+                        "expect(value).toBe(2)});")
+                    self.prove(source, {"golden/0.txt": "one", "golden/1.txt": "two"},
+                        accepted=not swapped,
+                        detail="Snapshot paths or raw hashes differ" if swapped else None)
+
+    def test_swallowed_missing_snapshots_still_reject(self):
+        for matcher in ("toMatchSnapshot()", "toMatchInlineSnapshot()",
+                        "toMatchFileSnapshot('../golden/missing.txt')"):
+            with self.subTest(matcher=matcher):
+                self.prove("test('value',async()=>{try{await expect(value)." + matcher +
+                    "}catch{}expect(value).toBe(2)});", detail="missing consumed snapshot")
+                self.prove(BODY + "test('missing',async({skip})=>{try{await expect(1)." +
+                    matcher + "}catch{}skip()});", detail="missing consumed snapshot")
 
     def test_fixture_setup_assertion_cannot_be_a_red_body(self):
         _, _, records = self.prove("const extended = test.extend({"
@@ -277,6 +396,17 @@ class Vitest4RegressionTests(unittest.TestCase):
     def prove_case(self, *args, **kwargs):
         with patch.object(regression, 'VITEST', VITEST4):
             return regression.RealVitestTests.prove_case(self, *args, **kwargs)
+
+    def test_startup_failure_reports_configuration_error_and_log(self):
+        _, proc, output = self.prove_case("export const value = 1;", IMPORT + BODY,
+            files={"vitest.config.mjs": "export default {test:{workspace:[]}};"})
+        self.assertEqual(proc.returncode, 1, output)
+        self.assertEqual(output["state"], "complete", output)
+        for phase in ("red", "green"):
+            diagnostic = output[phase]["report_error"]
+            self.assertIn("workspace", diagnostic)
+            self.assertIn(str(Path(output["evidence_dir"]) / f"{phase}.log"), diagnostic)
+        self.assertNotIn("has no attribute", str(output["checks"]))
 
     def test_changed_project_configs_fail_harness_identity(self):
         for filename in ("vitest.config.mjs", "vite.config.mjs", "vitest.config.ts"):

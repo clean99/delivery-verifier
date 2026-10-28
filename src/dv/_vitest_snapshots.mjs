@@ -4,13 +4,16 @@ import { resolve } from 'node:path';
 
 export const environments = new WeakMap();
 
-export function observeSnapshots(environment, file) {
+export function observeSnapshots(environment, file, currentTest) {
   let observer = environments.get(environment);
   if (!observer) {
     observer = {};
     environments.set(environment, observer);
     const read = environment.readSnapshotFile;
     environment.readSnapshotFile = async function(path, ...args) {
+      // Capture attribution before awaiting IO, including direct environment reads.
+      const records = observer.records;
+      const testRecords = observer.tests.get(observer.currentTest?.());
       const content = await read.call(this, path, ...args);
       if (content != null && typeof content !== 'string') {
         throw new Error('dv: unsupported snapshot content');
@@ -29,7 +32,8 @@ export function observeSnapshots(environment, file) {
         path: resolve(path),
         sha256: bytes == null ? null : createHash('sha256').update(bytes).digest('hex'),
       };
-      observer.records.push(record);
+      records.push(record);
+      testRecords?.push(record);
       observer.reads.set(record.path, record);
       return content;
     };
@@ -39,6 +43,7 @@ export function observeSnapshots(environment, file) {
       };
     }
   }
+  observer.currentTest = currentTest;
   observer.records = file.meta.dvSnapshots;
   observer.reads = new Map();
   observer.tests = new Map();

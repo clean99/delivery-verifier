@@ -30,6 +30,8 @@ from dv.vitest import (
     snapshot_inputs,
     snapshot_oracles,
     snapshot_parity,
+    test_outcomes,
+    test_parity,
 )
 
 
@@ -164,7 +166,7 @@ def run(
             }
             output["context_sha256"] = digest(canonical(bound))
             write_json(directory / "proof.json", output)
-            oracles, harnesses = {}, {}
+            oracles, harnesses, outcomes = {}, {}, {}
             for phase, ref, entries in (("red", base, red_tree), ("green", head, head_tree)):
                 worktree, cache = snapshots.create(phase, ref, entries)
                 phase_command = command
@@ -186,6 +188,9 @@ def run(
                     )
                     output[phase] = executed
                     if runner == "vitest":
+                        if executed.get("report_error"):
+                            checks.append(row(f"{phase} runner report", "fail",
+                                              executed["report_error"]))
                         valid, inputs, detail = harness_inputs(
                             log.read_bytes(), worktree.root, repo, entries)
                         checks.append(row(f"{phase} harness inputs", "pass" if valid else "fail",
@@ -197,6 +202,7 @@ def run(
                                           detail))
                         if valid:
                             oracles[phase] = snapshot_oracles(log.read_bytes(), worktree.root)
+                            outcomes[phase] = test_outcomes(log.read_bytes(), worktree.root)
                 finally:
                     after = file_state(worktree.root, entries)
                     changed = before != after or index != worktree.git_path("index").read_bytes()
@@ -220,6 +226,10 @@ def run(
                 if executed["status"] != "normal":
                     break
             if runner == "vitest":
+                identical, detail = test_parity(outcomes["red"], outcomes["green"]) if (
+                    "red" in outcomes and "green" in outcomes
+                ) else (False, "Test result validation must pass in both phases")
+                checks.append(row("test result identity", "pass" if identical else "fail", detail))
                 identical, detail = harness_parity(harnesses["red"], harnesses["green"]) if (
                     "red" in harnesses and "green" in harnesses
                 ) else (False, "Harness input validation must pass in both phases")

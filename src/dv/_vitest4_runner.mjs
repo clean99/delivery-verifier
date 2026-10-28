@@ -18,6 +18,7 @@ const thrown = new WeakMap();
 const results = new WeakMap();
 const pending = new Map();
 const clients = new WeakSet();
+let snapshotAccess = null;
 const bodyContext = new AsyncLocalStorage();
 const promises = new WeakMap();
 const promiseIds = new Map();
@@ -111,6 +112,10 @@ const observer = {
       thrown.delete(error);
     }
   },
+  snapshotState(state, method, url) {
+    if (!sourceIs('snapshot', url) || snapshotAccess?.state !== state ||
+      snapshotAccess.methods.shift() !== method) refuseSnapshots();
+  },
   snapshotResult(result, error, url) {
     const observed = results.get(result);
     if (!sourceIs('matchers', url) || !observed || observed.consumed) {
@@ -129,7 +134,7 @@ Object.defineProperty(globalThis, symbol, { value: observer });
 function refuseSnapshots() {
   unsupportedSnapshots = true;
   for (const file of files) file.meta.dvUnsupportedSnapshots = true;
-  throw new Error('dv: domain and polling snapshots are unsupported');
+  throw new Error('dv: domain and polling snapshots are unsupported; unobserved snapshot access');
 }
 
 function installSnapshots(client) {
@@ -155,8 +160,16 @@ function installSnapshots(client) {
     const entry = { path: resolve(options.isInline ? options.filepath
       : options.rawSnapshot?.file ?? state.snapshotPath), kind, key,
       sha256: expected == null ? null : createHash('sha256').update(expected).digest('hex') };
-    // probeExpectedSnapshot can consume an entry before State.match is reached.
-    const result = match.call(this, options);
+    // Retain consumption even if the matcher throws and user code catches it.
+    records.push(entry);
+    const previous = snapshotAccess;
+    snapshotAccess = { state, methods: ['probeExpectedSnapshot', 'match'] };
+    let result;
+    try {
+      result = match.call(this, options);
+    } finally {
+      snapshotAccess = previous;
+    }
     if (state._counters.get(testName) !== count ||
       state._testIdToKeys.get(testId)?.at(-1) !== key) {
       throw new Error('dv: unsupported snapshot entry key or counter');
@@ -165,7 +178,6 @@ function installSnapshots(client) {
       const stack = state._inlineSnapshotStacks.filter(stack => stack.testId === testId).at(-1);
       if (stack?.file) entry.path = resolve(stack.file);
     }
-    records.push(entry);
     results.set(result, { testId, context: active(), consumed: false });
     if (!pending.has(testId)) pending.set(testId, new Set());
     pending.get(testId).add(result);
@@ -209,7 +221,7 @@ export default class DeliveryRunner extends TestRunner {
       if (typeof environment.readSnapshotFile !== 'function' || environment.readSnapshotFileData) {
         throw new Error('dv: unsupported snapshot read contract');
       }
-      observeSnapshots(environment, suite.file);
+      observeSnapshots(environment, suite.file, () => bodyContext.getStore()?.task.id);
     }
     await super.onBeforeRunSuite(suite);
     if (suite.mode !== 'skip' && 'filepath' in suite) {
