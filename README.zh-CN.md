@@ -27,10 +27,10 @@ Assertion-only red failure and executed green pass.
 
 准备带 `venv` 和 `pip` 的 Python 3.10–3.13、Git 2.38+ 及 Linux/macOS。部分 Linux 发行版需单独安装 venv 系统包，例如 `python3-venv`。
 
-用 [pipx](https://pipx.pypa.io/latest/how-to/install-pipx.html) 安装 **GitHub Release v0.3.1 的 wheel**：
+用 [pipx](https://pipx.pypa.io/latest/how-to/install-pipx.html) 安装 **GitHub Release v0.4.0 的 wheel**：
 
 ```sh
-pipx install https://github.com/clean99/delivery-verifier/releases/download/v0.3.1/delivery_verifier-0.3.1-py3-none-any.whl
+pipx install https://github.com/clean99/delivery-verifier/releases/download/v0.4.0/delivery_verifier-0.4.0-py3-none-any.whl
 pipx ensurepath
 ```
 
@@ -178,7 +178,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install pytest==8.4.2
-      - uses: clean99/delivery-verifier@v0.3.1
+      - uses: clean99/delivery-verifier@v0.4.0
         with:
           test: python -m pytest --tb=long tests/test_words.py
 ```
@@ -201,7 +201,7 @@ jobs:
         with:
           node-version: '20'
       - run: npm ci
-      - uses: clean99/delivery-verifier@v0.3.1
+      - uses: clean99/delivery-verifier@v0.4.0
         with:
           test: npx vitest run tests/words.test.js
 ```
@@ -212,7 +212,7 @@ jobs:
 | --- | --- | --- |
 | `test` | 必填 | 直接调用受支持的运行器，按参数数组解析，保留原有 shell 展开限制。 |
 | `base` | `pull_request` 的目标分支，其他事件使用仓库默认分支 | 从 `origin` 拉取的分支，例如 `main`、`release/topic` 或 `refs/heads/main`。短名称始终按 `refs/heads/` 解析，同名 tag 不影响选择。输入范围仅限分支，排除 tag、commit ID 和远程跟踪别名。证明基线为该分支与检出 `HEAD` 的合并基点，分支缺失时失败。 |
-| `version` | `local` | 用 pipx 从 action 自身的源码目录安装，与固定的 action commit 一致。显式填写 `0.3.1` 或 `v0.3.1` 等发布版本时，改为安装对应的 GitHub Release wheel。 |
+| `version` | `local` | 用 pipx 从 action 自身的源码目录安装，与固定的 action commit 一致。显式填写 `0.4.0` 或 `v0.4.0` 等发布版本时，改为安装对应的 GitHub Release wheel。 |
 | `timeout` | `1800` | 每个 red/green 阶段的超时秒数，取正整数。 |
 | `working-directory` | `.` | Git 仓库根目录，相对于 `GITHUB_WORKSPACE`，也可传绝对路径。测试从此根目录运行，测试路径按仓库根目录填写。 |
 
@@ -299,7 +299,7 @@ Jest、裸脚本、隐藏堆栈等暂不支持的报告格式会验证失败。�
 按官方指引[安装 uv](https://docs.astral.sh/uv/getting-started/installation/)，再安装同一份 wheel：
 
 ```sh
-uv tool install https://github.com/clean99/delivery-verifier/releases/download/v0.3.1/delivery_verifier-0.3.1-py3-none-any.whl
+uv tool install https://github.com/clean99/delivery-verifier/releases/download/v0.4.0/delivery_verifier-0.4.0-py3-none-any.whl
 uv tool update-shell
 ```
 
@@ -312,7 +312,7 @@ uv tool update-shell
 ```sh
 python3 -m venv .venv
 . .venv/bin/activate
-python -m pip install https://github.com/clean99/delivery-verifier/releases/download/v0.3.1/delivery_verifier-0.3.1-py3-none-any.whl
+python -m pip install https://github.com/clean99/delivery-verifier/releases/download/v0.4.0/delivery_verifier-0.4.0-py3-none-any.whl
 dv --version
 dv prove --help
 ```
@@ -321,13 +321,13 @@ dv prove --help
 
 ### Git tag：安装固定版本
 
-通过 v0.3.1 tag 安装对应源码：
+通过 v0.4.0 tag 安装对应源码：
 
 ```sh
-pipx install "delivery-verifier @ git+https://github.com/clean99/delivery-verifier.git@v0.3.1"
+pipx install "delivery-verifier @ git+https://github.com/clean99/delivery-verifier.git@v0.4.0"
 ```
 
-Release 也提供源码归档 [`delivery_verifier-0.3.1.tar.gz`](https://github.com/clean99/delivery-verifier/releases/download/v0.3.1/delivery_verifier-0.3.1.tar.gz)。源码安装在构建时需要 setuptools >=68，安装器通常会下载它；离线安装需提前准备构建工具。Wheel 可直接安装。安装后的运行时依赖是 Python 标准库和本地 Git。
+Release 也提供源码归档 [`delivery_verifier-0.4.0.tar.gz`](https://github.com/clean99/delivery-verifier/releases/download/v0.4.0/delivery_verifier-0.4.0.tar.gz)。源码安装在构建时需要 setuptools >=68，安装器通常会下载它；离线安装需提前准备构建工具。Wheel 可直接安装。安装后的运行时依赖是 Python 标准库和本地 Git。
 
 ### 本地源码：用于开发贡献
 

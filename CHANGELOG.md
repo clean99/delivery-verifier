@@ -1,10 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 — 2026-10-28
 
 ### Added
 
-- `dv prove` supports exactly Vitest 4.1.12 alongside 3.2.x. Every other 4.x and all 5.x versions remain rejected. The 4.1.12 matrix covers Vite 6.4.5/7.3.7/8.3.5 on Node 20/22/24 with npm and isolated pnpm.
+- `dv prove` supports exactly Vitest 4.1.12 alongside 3.2.x through an exact-version allowlist and pinned source fingerprints. Every other 4.x and all 5.x versions remain rejected because their body, snapshot and shutdown boundaries have not been verified. The 4.1.12 matrix covers Vite 6.4.5/7.3.7/8.3.5 on Node 20/22/24 with npm and isolated pnpm.
 - Source-checked instrumentation in phase-owned dependencies observes the original test handler after fixture resolution. Clean test/file/worker fixtures qualify; setup, teardown, detached async work, assertion-count and lifecycle errors do not. Shutdown requires empty post-close and final Vitest error collections.
 - Snapshot attribution follows 4.1.12 `match` results through the exact matcher-created Error, with read-only `--update=none`. Domain/polling snapshots, unbound custom snapshot helpers, `aroundEach`/`aroundAll`, `onUnhandledError` callbacks and `--minWorkers` are rejected on 4.1.12.
 - Effective configuration retains `viteDefine` keys and literal types while normalizing checkout path spans, and captures setup imports across Vite environment graphs.

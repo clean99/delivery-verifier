@@ -27,10 +27,10 @@ Assertion-only red failure and executed green pass.
 
 Requirements: Python 3.10–3.13 with `venv` and `pip`, Git 2.38+, Linux/macOS. Some Linux distributions package `venv` separately (for example, `python3-venv`).
 
-Install the **v0.3.1 GitHub Release wheel** with [pipx](https://pipx.pypa.io/latest/how-to/install-pipx.html):
+Install the **v0.4.0 GitHub Release wheel** with [pipx](https://pipx.pypa.io/latest/how-to/install-pipx.html):
 
 ```sh
-pipx install https://github.com/clean99/delivery-verifier/releases/download/v0.3.1/delivery_verifier-0.3.1-py3-none-any.whl
+pipx install https://github.com/clean99/delivery-verifier/releases/download/v0.4.0/delivery_verifier-0.4.0-py3-none-any.whl
 pipx ensurepath
 ```
 
@@ -178,7 +178,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install pytest==8.4.2
-      - uses: clean99/delivery-verifier@v0.3.1
+      - uses: clean99/delivery-verifier@v0.4.0
         with:
           test: python -m pytest --tb=long tests/test_words.py
 ```
@@ -201,7 +201,7 @@ jobs:
         with:
           node-version: '20'
       - run: npm ci
-      - uses: clean99/delivery-verifier@v0.3.1
+      - uses: clean99/delivery-verifier@v0.4.0
         with:
           test: npx vitest run tests/words.test.js
 ```
@@ -212,7 +212,7 @@ Pinning the action to a reviewed full commit SHA is the most locked-down option.
 | --- | --- | --- |
 | `test` | Required | Direct supported runner command, split as argv without shell expansion. |
 | `base` | PR base branch on `pull_request`, repository default branch otherwise | Branch fetched from `origin`, such as `main`, `release/topic` or `refs/heads/main`. Short names always select `refs/heads/`, never a same-named tag. Tags, commit IDs and remote-tracking aliases are not supported. The proof uses the branch's merge base with checked-out `HEAD`; a missing branch fails. |
-| `version` | `local` | Install with pipx from the action's own source at the same pinned commit. An explicit release version, such as `0.3.1` or `v0.3.1`, installs its GitHub Release wheel instead. |
+| `version` | `local` | Install with pipx from the action's own source at the same pinned commit. An explicit release version, such as `0.4.0` or `v0.4.0`, installs its GitHub Release wheel instead. |
 | `timeout` | `1800` | Positive integer seconds per red/green phase. |
 | `working-directory` | `.` | Git repository root, relative to `GITHUB_WORKSPACE` or absolute. Tests run from this root; use repository-relative test paths. |
 
@@ -299,7 +299,7 @@ Unsupported reporters, including Jest, bare scripts, and suppressed tracebacks f
 After [installing uv](https://docs.astral.sh/uv/getting-started/installation/), install the same release wheel:
 
 ```sh
-uv tool install https://github.com/clean99/delivery-verifier/releases/download/v0.3.1/delivery_verifier-0.3.1-py3-none-any.whl
+uv tool install https://github.com/clean99/delivery-verifier/releases/download/v0.4.0/delivery_verifier-0.4.0-py3-none-any.whl
 uv tool update-shell
 ```
 
@@ -312,7 +312,7 @@ This option needs neither pipx nor uv:
 ```sh
 python3 -m venv .venv
 . .venv/bin/activate
-python -m pip install https://github.com/clean99/delivery-verifier/releases/download/v0.3.1/delivery_verifier-0.3.1-py3-none-any.whl
+python -m pip install https://github.com/clean99/delivery-verifier/releases/download/v0.4.0/delivery_verifier-0.4.0-py3-none-any.whl
 dv --version
 dv prove --help
 ```
@@ -321,13 +321,13 @@ Keep this environment activated when changing into your project; activation puts
 
 ### Git tag
 
-Use the pinned v0.3.1 source tag instead of a moving branch:
+Use the pinned v0.4.0 source tag instead of a moving branch:
 
 ```sh
-pipx install "delivery-verifier @ git+https://github.com/clean99/delivery-verifier.git@v0.3.1"
+pipx install "delivery-verifier @ git+https://github.com/clean99/delivery-verifier.git@v0.4.0"
 ```
 
-The release also includes the source archive [`delivery_verifier-0.3.1.tar.gz`](https://github.com/clean99/delivery-verifier/releases/download/v0.3.1/delivery_verifier-0.3.1.tar.gz). Source installs need setuptools >=68 at build time, normally downloaded by the installer. Offline source installation needs locally available build tooling. The wheel needs no source build. Once installed, `dv` uses Python's standard library and your local Git executable.
+The release also includes the source archive [`delivery_verifier-0.4.0.tar.gz`](https://github.com/clean99/delivery-verifier/releases/download/v0.4.0/delivery_verifier-0.4.0.tar.gz). Source installs need setuptools >=68 at build time, normally downloaded by the installer. Offline source installation needs locally available build tooling. The wheel needs no source build. Once installed, `dv` uses Python's standard library and your local Git executable.
 
 ### From a local checkout (contributors)
 
