@@ -42,6 +42,27 @@ class VitestConfigTests(unittest.TestCase):
         """, str(ROOT / "src/dv/_vitest_reporter.mjs"), tempfile.gettempdir(), cwd=ROOT)
         self.assertTrue(all(output.values()), output)
 
+    def test_resolver_closures_cannot_be_identified_by_function_source(self):
+        output = node_json("""
+          import {pathToFileURL} from 'node:url';
+          const {configHashes}=await import(pathToFileURL(process.argv[1]));
+          const resolver=target=>()=>target;
+          const one=resolver('one.js'), two=resolver('two.js');
+          const rejected=[];
+          for(const resolveId of [one,two]) {
+            for(const customResolver of [resolveId,{resolveId}]) {
+              try {
+                configHashes({}, {resolve:{alias:[{find:'oracle',replacement:'unused',
+                  customResolver}]}}, process.cwd());
+                rejected.push(false);
+              } catch(error) {rejected.push(error.message.includes('vite.resolve'));}
+            }
+          }
+          console.log(JSON.stringify({sameSource:String(one)===String(two),rejected}));
+        """, str(ROOT / "src/dv/_vitest_reporter.mjs"), cwd=ROOT)
+        self.assertTrue(output["sameSource"])
+        self.assertEqual(output["rejected"], [True] * 4)
+
     def test_unsupported_config_objects_and_cycles_fail_closed(self):
         output = node_json("""
           import {pathToFileURL} from 'node:url';

@@ -47,7 +47,10 @@ export function configHashes(config, vite, root) {
     if (value === null || typeof value === 'boolean') return value;
     if (typeof value === 'number') return ['number', Object.is(value, -0) ? '-0' : String(value)];
     if (typeof value === 'undefined') return ['undefined'];
-    if (typeof value === 'function') return ['function', canonical(value.toString())];
+    if (typeof value === 'function') {
+      if (trail[0] === 'vite.resolve') throw new Error('custom resolver functions are unsupported');
+      return ['function', canonical(value.toString())];
+    }
     if (value instanceof RegExp) {
       return ['regexp', pathSpans(value.source, root, temporary, true), value.flags, value.lastIndex];
     }

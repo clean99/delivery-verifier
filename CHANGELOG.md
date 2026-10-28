@@ -9,6 +9,11 @@
 - Snapshot attribution follows 4.1.12 `match` results through the exact matcher-created Error, with read-only `--update=none`. Domain/polling snapshots, unbound custom snapshot helpers, `aroundEach`/`aroundAll`, `onUnhandledError` callbacks and `--minWorkers` are rejected on 4.1.12.
 - Effective configuration retains `viteDefine` keys and literal types while normalizing checkout path spans, and captures setup imports across Vite environment graphs.
 
+### Fixed
+
+- Reject functions in Vite resolver settings, including both alias `customResolver` forms, rather than treating identical function source as proof of identical closed-over targets. Declarative aliases remain supported.
+- Reject direct Vitest 4.1.12 snapshot-cache reads (`_snapshotData` and `_initialData`) in forks and threads, including caught errors, so switching expected entries cannot bypass per-test snapshot binding.
+
 ## 0.3.1 — 2026-10-28
 
 ### Fixed

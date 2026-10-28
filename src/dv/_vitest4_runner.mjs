@@ -152,8 +152,15 @@ function installSnapshots(client) {
     const count = state._counters.get(testName) + 1;
     const key = `${testName} ${count}`;
     const kind = options.isInline ? 'inline' : options.rawSnapshot ? 'raw' : 'external';
-    const expected = options.isInline ? options.inlineSnapshot : options.rawSnapshot
-      ? options.rawSnapshot.content : state._snapshotData[key];
+    const previous = snapshotAccess;
+    snapshotAccess = { state, methods: ['_snapshotData'] };
+    let expected;
+    try {
+      expected = options.isInline ? options.inlineSnapshot : options.rawSnapshot
+        ? options.rawSnapshot.content : state._snapshotData[key];
+    } finally {
+      snapshotAccess = previous;
+    }
     if (expected != null && typeof expected !== 'string') {
       throw new Error('dv: unsupported snapshot entry');
     }
@@ -162,7 +169,6 @@ function installSnapshots(client) {
       sha256: expected == null ? null : createHash('sha256').update(expected).digest('hex') };
     // Retain consumption even if the matcher throws and user code catches it.
     records.push(entry);
-    const previous = snapshotAccess;
     snapshotAccess = { state, methods: ['probeExpectedSnapshot', 'match'] };
     let result;
     try {

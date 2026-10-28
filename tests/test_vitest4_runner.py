@@ -185,6 +185,43 @@ class RealVitest4Tests(unittest.TestCase):
         self.assertNotEqual(red["initialConfigHashes"]["env"], green["initialConfigHashes"]["env"])
         self.assertEqual(red["configHashes"]["env"], green["configHashes"]["env"])
 
+    def test_custom_resolver_closed_over_targets_are_rejected(self):
+        for pool in ("forks", "threads"):
+            for resolver in ("resolveId", "{resolveId}"):
+                with self.subTest(pool=pool, resolver=resolver):
+                    config = ("import fs from 'node:fs';import {resolve} from 'node:path';"
+                        "const target=resolve('src',fs.readFileSync('src/value.js','utf8')"
+                        ".includes('= 1')?'one.js':'two.js');const resolveId=()=>target;"
+                        "export default {resolve:{alias:[{find:'oracle',replacement:'unused',"
+                        "customResolver:" + resolver + "}]},test:{pool:'" + pool + "'}};")
+                    _, output, _ = self.prove(
+                        "import oracle from 'oracle';test('value',()=>expect(oracle).toBe(2));",
+                        {"vitest.config.mjs": config, "src/one.js": "export default 1;",
+                         "src/two.js": "export default 2;"})
+                    for phase in ("red", "green"):
+                        log = (Path(output["evidence_dir"]) / f"{phase}.log").read_text()
+                        self.assertIn("cannot canonicalize effective configuration key "
+                                      "vite.resolve", log)
+
+    def test_direct_snapshot_cache_access_is_sticky_rejection(self):
+        for pool in ("forks", "threads"):
+            for field in ("_snapshotData", "_initialData"):
+                for caught in (False, True):
+                    with self.subTest(pool=pool, field=field, caught=caught):
+                        access = ("expected=Number(expect.getState().snapshotState."
+                                  + field + "[value===1?'one 1':'two 1']);")
+                        if caught:
+                            access = "try{" + access + "}catch{}"
+                        _, _, records = self.prove(
+                            "test('one',()=>expect(1).toMatchSnapshot());"
+                            "test('two',()=>expect(2).toMatchSnapshot());"
+                            "test('value',()=>{let expected=2;" + access
+                            + "expect(2).toBe(expected);expect(value).toBe(2)});",
+                            {"vitest.config.mjs": "export default {test:{pool:'" + pool + "'}};",
+                             SNAPSHOT: 'exports[`one 1`] = `1`;\nexports[`two 1`] = `2`;\n'})
+                        for record in records.values():
+                            self.assertTrue(record["files"][0]["unsupportedSnapshots"])
+
     def test_direct_snapshot_state_access_is_sticky_rejection(self):
         for method in ("match", "probeExpectedSnapshot"):
             for caught in (False, True):

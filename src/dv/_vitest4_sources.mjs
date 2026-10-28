@@ -44,6 +44,13 @@ function instrument(key, text) {
     text = text.slice(0, fail) + replace(text.slice(fail), insertion,
       `${observer}.errors(result, e, errors);\n\t\t${insertion}`);
   } else if (key === 'snapshot') {
+    // Keep stock cache operations private; only the adapter may read expected entries.
+    for (const [field, count] of [['_snapshotData', 12], ['_initialData', 3]]) {
+      text = replace(text, `this.${field}`, `this.#${field}`, count);
+      text = replace(text, `\t${field};`, `\t#${field};\n\tget ${field}() {\n` +
+        `\t\t${observer}.snapshotState(this, '${field}', import.meta.url);\n` +
+        `\t\treturn this.#${field};\n\t}`);
+    }
     for (const [method, signature] of [
       ['probeExpectedSnapshot', 'probeExpectedSnapshot(options) {'],
       ['match', 'match({ testId, testName, received, key, inlineSnapshot, isInline, error, rawSnapshot, assertionName }) {'],
